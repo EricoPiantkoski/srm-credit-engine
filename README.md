@@ -24,7 +24,7 @@ Trunk Based não é uma opção válida para o projeto dado não possuir feature
 | Branch | Origem | Merge | Função |
 | --- | --- | --- | --- |
 | `main` | — | recebe `release/*` e `hotfix/*` | Produção. Sempre estável e releasable |
-| `release/vX.Y.Z` | `develop` (automática) | `main` e merge-back em `develop` | Estabilização e bump de versão |
+| `release/vX.Y.Z` | `main` (automática) | `main` | Snapshot imutável de estabilização e bump de versão |
 | `develop` | `main` | recebe `feature/*` e `hotfix/*` | Linha de integração das features |
 | `feature/*` | `develop` | `develop` | Desenvolvimento de funcionalidades |
 | `hotfix/vX.Y.Z` | `main` | `main` e merge-back em `develop` | Correção urgente em produção |
@@ -32,10 +32,10 @@ Trunk Based não é uma opção válida para o projeto dado não possuir feature
 ### Fluxo
 
 1. **`feature/*`** é criada a partir de `develop`, desenvolvida e integrada via PR.
-2. Todo merge em `develop` dispara a criação automática de **`release/vX.Y.Z`** (bump patch a partir da última tag).
-3. **`release/vX.Y.Z`** é estabilizada, versionada e mergeada na `main` via PR.
-4. O merge na `main` gera automaticamente a **tag `vX.Y.Z`** e a **GitHub Release**.
-5. A release faz **merge-back** em `develop` para não perder o bump e correções.
+2. Todo merge em `develop` com conteúdo diferente de `main` e **sem PR aberto de `release/*` para `main`** dispara a criação automática de **`release/vX.Y.Z`** a partir de `main` (bump patch a partir da última tag).
+3. Enquanto existir PR aberto de `release/*` para `main`, nenhuma nova release é criada — a release ativa guarda o estado e recebe o conteúdo de `develop` via PR.
+4. **`release/vX.Y.Z`** é estabilizada e mergeada na `main` via PR.
+5. O merge na `main` gera automaticamente a **tag `vX.Y.Z`** e a **GitHub Release**.
 6. **`hotfix/vX.Y.Z`** nasce de `main`, corrige produção e retorna para `main` (tag) e `develop` (merge-back).
 
 ## Gestão de Crise e Rollback
