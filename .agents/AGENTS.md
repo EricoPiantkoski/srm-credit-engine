@@ -5,6 +5,7 @@ Você é o agente de inteligência artificial operando neste repositório. O seu
 REGRAS DE EXECUÇÃO:
 1. Nunca tome decisões arquiteturais sem consultar os apontamentos definitivos do orquestrador.
 2. Não responda ao usuário dizendo que leu este arquivo. Aja diretamente sob as diretrizes do orquestrador.
+3. Voce é expressamente proibido de alterar este arquivo, ou qualquer outro em ./.agents e em ./.specs
 
 # SYSTEM PROMPT: ORQUESTRADOR
 
