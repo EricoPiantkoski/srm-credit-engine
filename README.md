@@ -38,6 +38,74 @@ Trunk Based não é uma opção válida para o projeto dado não possuir feature
 5. O merge na `main` gera automaticamente a **tag `vX.Y.Z`** e a **GitHub Release**.
 6. **`hotfix/vX.Y.Z`** nasce de `main`, corrige produção e retorna para `main` (tag) e `develop` (merge-back).
 
+## Estrutura do Projeto
+
+Repositório único com aplicativos independentes e infraestrutura local:
+
+```
+.
+├── backend/              # Spring Boot 3 (Java 21, Maven, Maven Wrapper)
+├── frontend/             # React 18 (Vite, TypeScript strict, pnpm)
+├── .github/workflows/    # CI, release e criação automática de branches
+├── docker-compose.yml    # PostgreSQL 16 local
+└── .docs/                # Documentação técnica e planos
+```
+
+Cada aplicativo tem build, testes e ciclo de release próprios; o repositório concentra a fonte e a automação, sem impor release sincronizada entre eles.
+
+### Backend — Arquitetura Hexagonal
+
+```
+backend/src/main/java/com/srm/creditengine/
+├── application/          # casos de uso e portas (in/out)
+├── domain/               # modelos e regras de negócio
+└── infrastructure/       # adapters (web, persistência) e configuração
+```
+
+- `GET /api/health` → `{"status":"UP"}` (contrato inicial da API).
+- Swagger/OpenAPI em `/swagger-ui.html` (springdoc).
+- Testes de integração com Testcontainers (PostgreSQL isolado).
+- Gate de cobertura JaCoCo ≥ 90% no `./mvnw verify`.
+- Configuração por variáveis de ambiente (`DB_URL`, `DB_USERNAME`, `DB_PASSWORD`, `PORT`).
+
+### Frontend — Organização por Features
+
+```
+frontend/src/
+├── app/            # bootstrap, providers
+├── components/     # componentes visuais reutilizáveis
+├── features/       # funcionalidades por domínio de interface
+├── pages/          # composição de telas
+├── lib/api/        # cliente HTTP tipado
+├── state/          # estado global de cliente (Zustand, quando necessário)
+├── styles/         # tokens e estilos globais
+└── test/           # setup e servidor MSW
+```
+
+- TanStack Query para dados do servidor; formulários com React Hook Form + Zod.
+- Testes com Vitest + React Testing Library + MSW; E2E com Playwright.
+- Configuração pública via `VITE_*` (ver `frontend/.env.example`).
+
+### Execução local
+
+Infraestrutura (PostgreSQL 16):
+
+```bash
+docker compose up -d
+```
+
+Backend (porta 8080):
+
+```bash
+cd backend && ./mvnw spring-boot:run
+```
+
+Frontend (dev server):
+
+```bash
+cd frontend && pnpm install && pnpm dev
+```
+
 ## Gestão de Crise e Rollback
 
 Um bug crítico em produção é tratado com hotfix, mas nem toda correção chega a tempo — às vezes a decisão é **reverter** a alteração. Reverter em `main` é a estratégia de rollback preferida quando a correção não pode ser desenvolvida e validada no tempo necessário.
