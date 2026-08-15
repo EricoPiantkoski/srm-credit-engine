@@ -1,0 +1,19 @@
+# IDE
+.idea/
+
+# opencode
+.opencode/
+
+# macOS
+.DS_Store
+
+# Logs
+*.log
+
+# Dependências
+node_modules/
+
+# Builds
+dist/
+build/
+target/
