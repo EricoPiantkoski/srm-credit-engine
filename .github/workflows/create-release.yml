@@ -4,6 +4,9 @@ on:
   push:
     branches: [develop]
 
+permissions:
+  contents: write
+
 jobs:
   create-release:
     runs-on: ubuntu-latest
@@ -11,17 +14,36 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+      - name: Fetch all branches
+        run: git fetch --all --prune
+      - name: Check if a new release is needed
+        id: check
+        run: |
+          open=false
+          for branch in $(git branch -r | sed 's/^ *//' | grep -E '^origin/release/'); do
+            if ! git diff --quiet "$branch" origin/main; then
+              open=true
+              break
+            fi
+          done
+          if [ "$open" = true ] || git diff --quiet origin/main origin/develop; then
+            echo "create=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "create=true" >> "$GITHUB_OUTPUT"
+          fi
       - name: Determine next version
         id: version
+        if: steps.check.outputs.create == 'true'
         run: |
           latest=$(git tag -l 'v*' | sort -V | tail -n1)
           if [ -z "$latest" ]; then
-            echo "next=v1.0.0" >> "$GITHUB_OUTPUT"
+            echo "next=v0.0.1" >> "$GITHUB_OUTPUT"
           else
             next=$(echo "$latest" | sed 's/^v//' | awk -F. '{print "v"$1"."$2"."$3+1}')
             echo "next=$next" >> "$GITHUB_OUTPUT"
           fi
-      - name: Create release branch
-        run: git push origin HEAD:refs/heads/release/${{ steps.version.outputs.next }}
+      - name: Create release branch from main
+        if: steps.check.outputs.create == 'true'
+        run: git push origin origin/main:refs/heads/release/${{ steps.version.outputs.next }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
