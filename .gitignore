@@ -17,3 +17,13 @@ node_modules/
 dist/
 build/
 target/
+
+# Env
+.env
+.env.*
+!.env.example
+
+# Frontend test artifacts
+frontend/playwright-report/
+frontend/test-results/
+

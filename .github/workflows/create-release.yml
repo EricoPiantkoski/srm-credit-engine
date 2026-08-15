@@ -19,18 +19,16 @@ jobs:
       - name: Check if a new release is needed
         id: check
         run: |
-          open=false
-          for branch in $(git branch -r | sed 's/^ *//' | grep -E '^origin/release/'); do
-            if ! git diff --quiet "$branch" origin/main; then
-              open=true
-              break
-            fi
-          done
-          if [ "$open" = true ] || git diff --quiet origin/main origin/develop; then
+          open_prs=$(gh pr list --base main --state open --head 'release/*' --json number --jq 'length')
+          if [ "${open_prs:-0}" -gt 0 ]; then
+            echo "create=false" >> "$GITHUB_OUTPUT"
+          elif git diff --quiet origin/main origin/develop; then
             echo "create=false" >> "$GITHUB_OUTPUT"
           else
             echo "create=true" >> "$GITHUB_OUTPUT"
           fi
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - name: Determine next version
         id: version
         if: steps.check.outputs.create == 'true'
