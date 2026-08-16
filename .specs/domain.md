@@ -2,6 +2,46 @@
 
 Este documento é a fonte de verdade para o entendimento do problema, a modelagem de domínio e a linha lógica de construção do produto. Ele organiza, ponto a ponto, a sequência de raciocínio que orienta as decisões de engenharia, e separa as implementações em domínios de negócio do backend e em domínios de interface do frontend, com mentalidade de desacoplamento.
 
+**Convenção de nomenclatura:** nomes de domínio (entidades, value objects, portas, casos de uso, endpoints, tabelas e colunas de negócio) em **português**; campos técnicos (`id`, `version`, `created_at`, `BigDecimal`, `Instant`) em inglês. Mescla deliberada português-inglês, com a linguagem ubíqua do negócio em PT.
+
+---
+
+## 0. Convenções de Engenharia (regras permanentes)
+
+Regras transversais a todo o código. Não são opcionais nem negociáveis por conveniência.
+
+### 0.1 Nomenclatura: português é reservado ao domínio
+
+| Uso **português** | Uso **inglês** |
+| --- | --- |
+| Entidades, value objects, agregados | Campos técnicos (`id`, `version`, `created_at`, `BigDecimal`, `Instant`) |
+| Portas (interfaces de entrada/saída) | Exceções (`DomainException`, `IncompatibleCurrenciesException`) |
+| Casos de uso (services de aplicação) | Classes de infraestrutura (handlers, DTOs, config, adapters, controllers) |
+| Endpoints, tabelas e colunas de negócio | Métodos/framework (Spring, JPA, HTTP) |
+
+Exceções são artefatos **técnicos**, não objetos de domínio — permanecem em inglês, mesmo que representem regras de negócio.
+
+### 0.2 Responsabilidade única (SRP) em operações
+
+- Um método **delega a validação a um método dedicado** antes de executar o que propõe (ex.: `somar` chama `validarMesmaMoeda`; `multiplicar` chama `validarFator`).
+- Proibido acumular "operar + validar" no mesmo método: isso viola o S de SOLID.
+- Exceção permitida: invariantes estruturais do próprio VO garantidas no **construtor** (nascer válido), delegando a um validador local (`validar`).
+
+### 0.3 Tratamento de exceções: domínio lança, fronteira traduz
+
+- O domínio **lança** exceções de domínio (`DomainException` e subtipos); nunca trata, ignora ou mapeia HTTP localmente.
+- A tradução exceção → HTTP é responsabilidade **única** do `GlobalExceptionHandler` (`@RestControllerAdvice` no adapter web):
+  - `DomainException` → `4xx` semântico com mensagem amigável;
+  - Bean Validation da fronteira HTTP (`MethodArgumentNotValidException`) → `400` com campo + mensagem;
+  - Inesperada → `500` genérico + `requestId` + log estruturado, sem detalhes internos.
+- Exceções inesperadas nunca deixam o fluxo seguir após uma falha que comprometa a consistência.
+
+### 0.4 Domínio framework-free
+
+- O domínio **não conhece** JPA, Spring, HTTP ou Bean Validation.
+- Bean Validation (`@NotNull`, `@Pattern`) pertence **apenas** à fronteira HTTP (DTOs de request), porque só um engine (via `@Valid`) o executa — não protege `new ...()` fora dela.
+- Validação no domínio é explícita (método validador), nunca anotação.
+
 ---
 
 ## 1. Contexto do Negócio
@@ -26,14 +66,14 @@ Abaixo, a linha de raciocínio que deve guiar todas as decisões. Cada etapa jus
 
 Antes de qualquer linha de código, a decisão mais importante é aceitar que números monetários **não podem usar ponto flutuante** (`double`/`float`). Em Java, a resposta é `BigDecimal` com escala e arredondamento explícitos. No banco, `NUMERIC(p,s)`. Esta escolha antecede tudo porque a fundação de integridade de um sistema financeiro está na aritmética.
 
-**Abordagem escolhida:** representar valores monetários como Value Object imutável (`Money`), carregando valor + moeda + escala, evitando "primitivism obsession" e erros de arredondamento dispersos no código.
+**Abordagem escolhida:** representar valores monetários como Value Object imutável (`Dinheiro`), carregando valor + moeda + escala, evitando "primitivism obsession" e erros de arredondamento dispersos no código.
 
 ```java
-public record Money(BigDecimal amount, CurrencyCode currency, int scale) {
-    public Money {
-        Objects.requireNonNull(amount);
-        Objects.requireNonNull(currency);
-        amount = amount.setScale(scale, RoundingMode.HALF_EVEN);
+public record Dinheiro(BigDecimal valor, CodigoMoeda moeda, int escala) {
+    public Dinheiro {
+        Objects.requireNonNull(valor);
+        Objects.requireNonNull(moeda);
+        valor = valor.setScale(escala, RoundingMode.HALF_EVEN);
     }
 }
 ```
@@ -46,10 +86,10 @@ O problema foi decomposto em **bounded contexts** (Domain-Driven Design), cada u
 
 | Domínio de negócio | Responsabilidade | Por que é separado |
 | --- | --- | --- |
-| **Currency** | Câmbio: taxas, conversão, histórico | Muda por integração externa e por agenda de mercado; não deve contaminar a precificação |
-| **Pricing** | Precificação: deságio, spreads por tipo de recebível | É a regra de maior variação (novos produtos entram com frequência) |
-| **Settlement** | Liquidação: registrar operações, integridade ACID, auditoria | É onde há concorrência e risco de inconsistência; exige transações atômicas |
-| **Analytics** | Consultas de alto volume (extrato de liquidação) | Tem requisito de performance diferente (leituras pesadas, agregações) |
+| **Câmbio** | Taxas de câmbio, conversão, histórico | Muda por integração externa e por agenda de mercado; não deve contaminar a precificação |
+| **Precificação** | Deságio, spreads por tipo de recebível | É a regra de maior variação (novos produtos entram com frequência) |
+| **Liquidação** | Registrar operações, integridade ACID, auditoria | É onde há concorrência e risco de inconsistência; exige transações atômicas |
+| **Extrato** | Consultas de alto volume (extrato de liquidação) | Tem requisito de performance diferente (leituras pesadas, agregações) |
 
 **Decisão importante (e deliberada):** estes domínios vivem em **módulos independentes dentro de um mesmo deployable** (modular monolith), e não em microserviços. Justificativa: para a volumetria inicial e a necessidade de consistência transacional imediata entre precificar e liquidar, o custo de uma saga distribuída seria maior que o benefício. A separação em módulos preserva a evolução futura para microserviços **sem** reescrever o domínio, pois as portas já isolam as fronteiras.
 
@@ -62,12 +102,12 @@ Cada domínio segue arquitetura hexagonal (ports & adapters), com regras de neg�
 - **Troca de adapters:** banco, fila ou API externa são substituíveis sem tocar no núcleo.
 
 ```
-domain/    -> entidades, value objects, regras de negócio, ports (interfaces)
+domain/    -> entidades, value objects, regras de negócio, portas (interfaces)
 application -> casos de uso, orquestração, serviços de aplicação
 infrastructure -> adapters (web, persistence, fila), configuração
 ```
 
-### 2.4 Ponto 4 — Currency Engine primeiro: nada de cross-currency sem câmbio
+### 2.4 Ponto 4 — Motor de Câmbio primeiro: nada de cross-currency sem câmbio
 
 A precificação cross-currency (título em BRL, pagamento em USD) **depende** de taxas de câmbio. Logo, o domínio de câmbio é pré-requisito lógico. Ele precisa:
 
@@ -76,17 +116,17 @@ A precificação cross-currency (título em BRL, pagamento em USD) **depende** d
 - Permitir atualização manual e integração (mockada por enquanto);
 - Manter **histórico** de taxas (essencial para auditoria e reprocessamento).
 
-**Abordagem escolhida:** taxa como entidade versionada por data/hora de vigência. A busca "a taxa vigente" é uma consulta pelo par + data máxima ≤ referência. O adapter de integração externa é isolado por interface (`ExchangeRateProvider`), para que o mock de hoje possa ser trocado por um provedor real (BCB, Reuters) sem tocar no domínio.
+**Abordagem escolhida:** taxa como entidade versionada por data/hora de vigência. A busca "a taxa vigente" é uma consulta pelo par + data máxima ≤ referência. O adapter de integração externa é isolado por interface (`ProvedorTaxaCambio`), para que o mock de hoje possa ser trocado por um provedor real (BCB, Reuters) sem tocar no domínio.
 
 ```java
-public interface ExchangeRateProvider {
-    Optional<ExchangeRate> fetch(CurrencyPair pair);
+public interface ProvedorTaxaCambio {
+    Optional<TaxaCambio> obter(ParMoedas par);
 }
 ```
 
 **Decisão sobre atualização:** a atualização manual é um caso de uso que valida moedas existentes, taxa positiva e persistência com conflito detectável (se duas atualizações concorrem, vence a mais recente por data — ou rejeita com `409` se o operador tentar sobrescrever uma vigência já ocupada).
 
-### 2.5 Ponto 5 — Pricing Engine com Strategy Pattern: a regra que mais varia
+### 2.5 Ponto 5 — Motor de Precificação com Strategy Pattern: a regra que mais varia
 
 O motor de precificação é o coração do produto. A fórmula base:
 
@@ -99,29 +139,29 @@ O spread varia **por tipo de recebível**:
 | Duplicata Mercantil | 1,5% |
 | Cheque Pré-datado | 2,5% |
 
-**Abordagem escolhida — Strategy Pattern:** cada tipo de recebível é uma estratégia (`PricingStrategy`) que encapsula sua regra de risco. O cálculo base é único; a estratégia fornece o spread. Isso cumpre o **Open/Closed Principle**: para adicionar um novo produto, cria-se uma nova estratégia sem modificar o motor.
+**Abordagem escolhida — Strategy Pattern:** cada tipo de recebível é uma estratégia (`EstrategiaPrecificacao`) que encapsula sua regra de risco. O cálculo base é único; a estratégia fornece o spread. Isso cumpre o **Open/Closed Principle**: para adicionar um novo produto, cria-se uma nova estratégia sem modificar o motor.
 
 ```java
-public interface PricingStrategy {
-    Spread spreadFor(Receivable receivable);
+public interface EstrategiaPrecificacao {
+    Spread spreadPara(Recebivel recebivel);
 }
 ```
 
-O motor (`PricingEngine`) recebe a estratégia resolvida por tipo, calcula o valor presente e aplica a conversão cambial **no final**, quando cross-currency.
+O motor (`MotorPrecificacao`) recebe a estratégia resolvida por tipo, calcula o valor presente e aplica a conversão cambial **no final**, quando cross-currency.
 
 **Por que a conversão no final:** o deságio é calculado sobre a moeda do título; a conversão é uma etapa de apresentação/liberação do valor em moeda de pagamento. Calcular o spread sobre o valor convertido mudaria o resultado (e o risco), pois o spread é uma taxa do ativo, não da moeda.
 
-**Decisão sobre arredondamento intermediário:** a fórmula usa potência com expoente decimal (prazo em meses fracionado). Potências decimais em `BigDecimal` exigem `Math.pow` sobre `double` — que reintroduz imprecisão. Abordagem: o prazo em dias é convertido para meses com escala definida e a potência é calculada via `BigDecimal.pow` para prazo inteiro ou `StrictMath.pow` apenas no expoente, com arredondamento final controlado pela escala de `Money`. A margem de erro da exponenciação é aceita **somente** na dimensão de prazo fracionário e corrigida no arredondamento final, documentada como decisão de precisão (ver ADR-003).
+**Decisão sobre arredondamento intermediário:** a fórmula usa potência com expoente decimal (prazo em meses fracionado). Potências decimais em `BigDecimal` exigem `Math.pow` sobre `double` — que reintroduz imprecisão. Abordagem: o prazo em dias é convertido para meses com escala definida e a potência é calculada via `BigDecimal.pow` para prazo inteiro ou `StrictMath.pow` apenas no expoente, com arredondamento final controlado pela escala de `Dinheiro`. A margem de erro da exponenciação é aceita **somente** na dimensão de prazo fracionário e corrigida no arredondamento final, documentada como decisão de precisão (ver ADR-003).
 
 ### 2.6 Ponto 6 — Caso de uso de simulação: valor líquido em tempo real
 
 O painel do operador precisa mostrar o valor líquido em tempo real enquanto o usuário digita. Isto não é uma transação — é uma **simulação**. 
 
-**Abordagem escolhida:** endpoint dedicado e stateless `POST /api/simulations/pricing` que recebe os parâmetros e retorna o valor líquido calculado. Não persiste nada. O frontend chama com debounce (a cada pausa de digitação) e renderiza o resultado.
+**Abordagem escolhida:** endpoint dedicado e stateless `POST /api/simulacoes/precificacao` que recebe os parâmetros e retorna o valor líquido calculado. Não persiste nada. O frontend chama com debounce (a cada pausa de digitação) e renderiza o resultado.
 
 **Por que endpoint no backend e não cálculo no frontend:** o frontend deve permanecer "burro" (ver agentes frontend). Duplicar a fórmula de precificação no cliente criaria duas fontes de verdade e risco de divergência de arredondamento. A regra de negócio vive no backend; o cliente apenas apresenta o resultado.
 
-### 2.7 Ponto 7 — Settlement com integridade ACID e proteção contra concorrência
+### 2.7 Ponto 7 — Liquidação com integridade ACID e proteção contra concorrência
 
 Liquidação é a operação que **não pode ficar pela metade**. Um lote de recebíveis deve ser precificado, convertido e registrado como uma transação única, com propriedades ACID.
 
@@ -130,7 +170,7 @@ Liquidação é a operação que **não pode ficar pela metade**. Um lote de rec
 **Proteção contra race condition — Optimistic Locking:** a versão de um recebível é incrementada a cada liquidação. Duas liquidações simultâneas sobre o mesmo recebível: a primeira vence, a segunda recebe `409 Conflict` e a aplicação reage de forma controlada (não deixa o operador sem resposta — informa o conflito e sugere reprocessamento).
 
 ```java
-public class Receivable extends AggregateRoot {
+public class Recebivel extends AggregateRoot {
     @Version
     private Long version;
 }
@@ -138,7 +178,7 @@ public class Receivable extends AggregateRoot {
 
 **Por que Optimistic Locking e não Locking Pessimista:** em operação de mesa com baixa taxa de conflito real, o custo de segurar locks de banco por operação é desnecessário. O otimista detecta o conflito e falha rápido, o que é mais escalável e mais simples de raciocinar. A escolha pessimista seria justificável se o conflito fosse frequente (ver ADR-005).
 
-**Idempotência:** o registro de liquidação aceita um `liquidationRequestId` gerado pelo cliente; o sistema rejeita requisições duplicadas, garantindo que retries de rede não criem liquidações duplicadas.
+**Idempotência:** o registro de liquidação aceita uma `chaveIdempotencia` gerada pelo cliente; o sistema rejeita requisições duplicadas, garantindo que retries de rede não criem liquidações duplicadas.
 
 ### 2.8 Ponto 8 — API First: contratos antes da implementação
 
@@ -146,12 +186,12 @@ O design da API é definido antes do código, com OpenAPI/Swagger como contrato 
 
 | Operação | Método | Código de sucesso | Código de erro |
 | --- | --- | --- | --- |
-| Criar recebível | `POST /api/receivables` | `201 Created` | `400`, `409` |
-| Listar recebíveis | `GET /api/receivables` | `200 OK` | — |
-| Simular precificação | `POST /api/simulations/pricing` | `200 OK` | `400`, `422` |
-| Liquidação em lote | `POST /api/liquidations` | `201 Created` | `400`, `409`, `422` |
-| Atualizar taxa de câmbio | `PUT /api/currency-rates` | `200 OK` | `400`, `409` |
-| Extrato de liquidação | `GET /api/liquidations/extract` | `200 OK` | `400` |
+| Criar recebível | `POST /api/recebiveis` | `201 Created` | `400`, `409` |
+| Listar recebíveis | `GET /api/recebiveis` | `200 OK` | — |
+| Simular precificação | `POST /api/simulacoes/precificacao` | `200 OK` | `400`, `422` |
+| Liquidação em lote | `POST /api/liquidacoes` | `201 Created` | `400`, `409`, `422` |
+| Atualizar taxa de câmbio | `PUT /api/taxas-cambio` | `200 OK` | `400`, `409` |
+| Extrato de liquidação | `GET /api/liquidacoes/extrato` | `200 OK` | `400` |
 
 **Decisão sobre `422`:** validação semântica de negócio (ex.: spread não configurado para o tipo) retorna `422 Unprocessable Entity`, separando "requisição malformada" (`400`) de "requisição válida porém não processável por regra de negócio".
 
@@ -164,7 +204,7 @@ Dois requisitos opostos coexistem:
 
 **Abordagem escolhida — duas estratégias de persistência:** JPA para a escrita/domínio (com `ddl-auto: validate` e Flyway como fonte do schema) e **JdbcTemplate/SQL nativo** para o extrato, passando pela camada de aplicação (preservando autorização e contrato) mas **sem** passar pela camada de negócio — exatamente como a diretriz do backend descreve: "relatórios podem ser organizados em duas camadas apenas, sem necessidade de passar pela de negócios".
 
-**Por que Query Builder/SQL nativo em vez de JPA para relatórios:** consultas de agregação geradas por JPA frequentemente produzem SQL ineficiente, com joins desnecessários e dificuldade de controle de índice. SQL nativo parametrizado permite: `GROUP BY` por período, `FILTER` por cedente/moeda, paginação por cursor para grandes volumes e garantia de uso de índice.
+**Por que SQL nativo em vez de JPA para relatórios:** consultas de agregação geradas por JPA frequentemente produzem SQL ineficiente, com joins desnecessários e dificuldade de controle de índice. SQL nativo parametrizado permite: `GROUP BY` por período, `FILTER` por cedente/moeda, paginação por cursor para grandes volumes e garantia de uso de índice.
 
 ### 2.10 Ponto 10 — Tratamento de exceções global e resiliente
 
@@ -189,7 +229,7 @@ A diretriz do backend é explícita: **não introduzir filas apenas para cumprir
 
 **Não usar mensageria agora para:** precificar e liquidar (precisam ser síncronos e atômicos — uma saga distribuída aumentaria o risco sem retorno).
 
-**Usar mensageria (fase de escala/evolução) para:** publicar **eventos de domínio** (`ReceivablePriced`, `SettlementExecuted`, `ExchangeRateUpdated`) consumidos por domínios que não exigem consistência imediata — ex.: Analytics alimentando o extrato de forma assíncrona, notificações, integrações externas. Isto desacopla a escrita transacional da leitura analítica: a liquidação não espera pela agregação.
+**Usar mensageria (fase de escala/evolução) para:** publicar **eventos de domínio** (`RecebivelPrecificado`, `LiquidacaoExecutada`, `TaxaCambioAtualizada`) consumidos por domínios que não exigem consistência imediata — ex.: o domínio Extrato alimentando suas projeções de forma assíncrona, notificações, integrações externas. Isto desacopla a escrita transacional da leitura analítica: a liquidação não espera pela agregação.
 
 Esta separação é deliberada e documentada (ver ADR-006): o modelo transacional escreve no banco OLTP; os eventos alimentam projeções analíticas (CQRS leve) quando a volumetria justificar.
 
@@ -219,43 +259,43 @@ O frontend é React (com TypeScript strict), conforme agentes. As decisões:
 
 A seguir, cada domínio de negócio detalhado com suas portas, regras e decisões, sob a mentalidade de desacoplamento.
 
-### 3.1 Domínio Currency (Câmbio)
+### 3.1 Domínio Câmbio
 
 **Responsabilidade:** armazenar e prover taxas de câmbio por par de moedas, com histórico e atualização manual ou integrada.
 
 **Modelo:**
-- `CurrencyCode` (BRL, USD) — enum/VO;
-- `CurrencyPair` (base, quote) — VO;
-- `ExchangeRate` (par, taxa, vigência em `Instant`) — entidade;
-- `Money` — VO monetário.
+- `CodigoMoeda` (BRL, USD) — enum/VO;
+- `ParMoedas` (base, cotação) — VO;
+- `TaxaCambio` (par, taxa, vigência em `Instant`) — entidade;
+- `Dinheiro` — VO monetário.
 
 **Regras:**
 - Moeda deve existir antes de aceitar taxa;
 - Taxa deve ser positiva;
 - Um par pode ter várias taxas em vigências distintas (histórico);
-- Conversão: `base * rate` para `quote`; operação inversa usa `1 / rate` com arredondamento controlado.
+- Conversão: `base * taxa` para a moeda de cotação; operação inversa usa `1 / taxa` com arredondamento controlado.
 
 **Portas de saída:**
-- `ExchangeRateProvider` (adapter externo, hoje mockado);
-- `ExchangeRateRepository` (persistência).
+- `ProvedorTaxaCambio` (adapter externo, hoje mockado);
+- `RepositorioTaxaCambio` (persistência).
 
 **Casos de uso (application):**
-- `UpdateExchangeRate` (manual, com detecção de conflito de vigência);
-- `GetCurrentRate` (taxa vigente para o par);
-- `ConvertMoney` (conversão com arredondamento e histórico).
+- `AtualizarTaxaCambio` (manual, com detecção de conflito de vigência);
+- `ObterTaxaVigente` (taxa vigente para o par);
+- `ConverterDinheiro` (conversão com arredondamento e histórico).
 
-**Decisão de desacoplamento:** a conversão nunca é calculada dentro do domínio Pricing; o Pricing **consulta** o Currency via porta de saída. Assim, uma mudança de fornecedor de câmbio não toca o motor de precificação.
+**Decisão de desacoplamento:** a conversão nunca é calculada dentro do domínio Precificação; a Precificação **consulta** o Câmbio via porta de saída. Assim, uma mudança de fornecedor de câmbio não toca o motor de precificação.
 
-### 3.2 Domínio Pricing (Precificação)
+### 3.2 Domínio Precificação
 
 **Responsabilidade:** calcular o valor presente (deságio) de um recebível, aplicando spread por tipo de produto e conversão cambial quando cross-currency.
 
 **Modelo:**
-- `Receivable` (valor face, moeda do título, vencimento, tipo);
-- `ReceivableType` (DuplicataMercantil, ChequePreDatado);
+- `Recebivel` (valor face, moeda do título, vencimento, tipo);
+- `TipoRecebivel` (DuplicataMercantil, ChequePreDatado);
 - `Spread` (taxa por período);
-- `PricingStrategy` — interface; implementações por tipo;
-- `PricingResult` (valor presente, spread aplicado, valor convertido quando aplicável).
+- `EstrategiaPrecificacao` — interface; implementações por tipo;
+- `ResultadoPrecificacao` (valor presente, spread aplicado, valor convertido quando aplicável).
 
 **Regra de cálculo:**
 ```
@@ -265,43 +305,43 @@ se pagamento != moeda do título:
 ```
 
 **Estratégias:**
-- `DuplicataMercantilStrategy` — spread 1,5% a.m.;
-- `ChequePreDatadoStrategy` — spread 2,5% a.m.
+- `EstrategiaDuplicataMercantil` — spread 1,5% a.m.;
+- `EstrategiaChequePreDatado` — spread 2,5% a.m.
 
 **Portas de saída:**
-- `ExchangeRateProvider`/`CurrencyService` (para cross-currency);
-- `ReceivableRepository`.
+- `ProvedorTaxaCambio`/`ServicoCambio` (para cross-currency);
+- `RepositorioRecebivel`.
 
-**Decisão de desacoplamento — Strategy:** o motor `PricingEngine` depende da interface `PricingStrategy`, resolvida por tipo via um `StrategyResolver` (factory). Adicionar produto = nova estratégia + registro no resolver. Nenhuma mudança no motor.
+**Decisão de desacoplamento — Strategy:** o motor `MotorPrecificacao` depende da interface `EstrategiaPrecificacao`, resolvida por tipo via um `ResolvedorEstrategia` (factory). Adicionar produto = nova estratégia + registro no resolvedor. Nenhuma mudança no motor.
 
 ```java
-public class PricingEngine {
-    public PricingResult price(Receivable receivable, PricingStrategy strategy, Money payoutCurrency) { ... }
+public class MotorPrecificacao {
+    public ResultadoPrecificacao precificar(Recebivel recebivel, EstrategiaPrecificacao estrategia, Dinheiro moedaPagamento) { ... }
 }
 ```
 
-### 3.3 Domínio Settlement (Liquidação)
+### 3.3 Domínio Liquidação
 
 **Responsabilidade:** registrar a liquidação de um lote de recebíveis como transação atômica e auditável, com valor líquido final em moeda de pagamento.
 
 **Modelo:**
-- `Liquidation` (agregado raiz: lote, status, idempotency key);
-- `LiquidationItem` (recebível, valores calculados, spread aplicado);
-- `LiquidationStatus` (PROCESSING, SETTLED, FAILED).
+- `Liquidacao` (agregado raiz: lote, status, chave de idempotência);
+- `ItemLiquidacao` (recebível, valores calculados, spread aplicado);
+- `StatusLiquidacao` (PROCESSANDO, LIQUIDADA, FALHOU).
 
 **Regras:**
 - Todo o lote liquida em uma única transação ACID;
 - Recebível tem `version` (Optimistic Locking) — conflito retorna `409`;
-- Idempotência via `liquidationRequestId` — requisições duplicadas não geram liquidações novas;
+- Idempotência via `chaveIdempotencia` — requisições duplicadas não geram liquidações novas;
 - Auditabilidade: cada item registra valor face, spread, prazo, valor presente, moeda, taxa e valor líquido final — nada é apagado, apenas registrado.
 
 **Portas de saída:**
-- `LiquidationRepository`;
-- `ReceivableRepository` (com lock otimista).
+- `RepositorioLiquidacao`;
+- `RepositorioRecebivel` (com lock otimista).
 
-**Decisão de desacoplamento:** o Settlement orquestra Pricing e Currency **por portas**; não conhece suas implementações. Se um dia a liquidação virar microserviço, as portas são os contratos de integração.
+**Decisão de desacoplamento:** a Liquidação orquestra Precificação e Câmbio **por portas**; não conhece suas implementações. Se um dia a liquidação virar microserviço, as portas são os contratos de integração.
 
-### 3.4 Domínio Analytics (Extrato de Liquidação)
+### 3.4 Domínio Extrato (Liquidações)
 
 **Responsabilidade:** prover consultas de alto volume sobre liquidações, com filtros por período, cedente e moeda.
 
@@ -314,7 +354,7 @@ public class PricingEngine {
 - **Agregação** (soma por período/moeda) em SQL, não em memória.
 
 **Porta de saída:**
-- `LiquidationQuery` (interface de leitura dedicada, separada do repositório de escrita — segregação CQRS leve).
+- `ConsultaLiquidacao` (interface de leitura dedicada, separada do repositório de escrita — segregação CQRS leve).
 
 ---
 
@@ -326,13 +366,13 @@ public class PricingEngine {
 
 **Abordagem:**
 - Formulário com React Hook Form + Zod (validação de experiência: valor positivo, vencimento futuro, tipo válido);
-- Ao mudar qualquer campo, chama `POST /api/simulations/pricing` com **debounce** (ex.: 300–400ms);
+- Ao mudar qualquer campo, chama `POST /api/simulacoes/precificacao` com **debounce** (ex.: 300–400ms);
 - O resultado (valor líquido, spread aplicado, valor convertido) é apresentado em um painel de resultado;
 - Estados: carregando (indicador), sucesso (resultado), erro (mensagem clara), vazio (aguardando input válido).
 
 **Por que simulação via API e não cálculo local:** o backend é a fonte autoritativa da regra de precificação (ver §2.6). O frontend não replica fórmulas nem arredondamentos.
 
-**Desacoplamento:** o componente visual de formulário e o de resultado são puros; um hook de aplicação (`usePricingSimulation`) encapsula a chamada via adaptador `pricingApi` (cliente tipado). A lógica de apresentação não conhece HTTP.
+**Desacoplamento:** o componente visual de formulário e o de resultado são puros; um hook de aplicação (`useSimulacaoPrecificacao`) encapsula a chamada via adaptador `precificacaoApi` (cliente tipado). A lógica de apresentação não conhece HTTP.
 
 ### 4.2 Domínio de Interface — Grid de Transações
 
@@ -343,9 +383,9 @@ public class PricingEngine {
 - **Filtros dinâmicos** (período, cedente, moeda) no **estado da URL** — compartilháveis e persistíveis;
 - TanStack Query gerencia cache e invalidação (filtro trocado → nova query; resultados cacheados por chave de filtro);
 - Estados de carregamento/vazio/erro adequados;
-- Colunas com formatação monetária respeitando a moeda (Intl.NumberFormat por `CurrencyCode`).
+- Colunas com formatação monetária respeitando a moeda (Intl.NumberFormat por `CodigoMoeda`).
 
-**Desacoplamento:** componentes de tabela e filtros são puros; hook `useLiquidations` encapsula a query do TanStack Query; o adaptador `liquidationApi` traduz o contrato do backend.
+**Desacoplamento:** componentes de tabela e filtros são puros; hook `useLiquidacoes` encapsula a query do TanStack Query; o adaptador `liquidacaoApi` traduz o contrato do backend.
 
 ### 4.3 Arquitetura de Estado
 
@@ -361,8 +401,6 @@ Regra transversal: nenhum componente visual importa TanStack Query, Zustand ou o
 ## 5. Modelagem de Dados
 
 ### 5.1 Diagrama ER (conceitual)
-
-Convenção: nomes de domínio (tabelas e colunas de negócio) em português; campos técnicos (`id`, `version`, `created_at`) em inglês.
 
 ```
 MOEDA (moedas)
@@ -491,7 +529,7 @@ CREATE INDEX idx_liquidacao_periodo ON liquidacao (created_at);
 | ADR | Decisão | Motivo |
 | --- | --- | --- |
 | ADR-001 | Modular monolith por bounded context, com portas prontas para microserviços | Consistência transacional imediata sem custo de saga; evolução sem reescrita |
-| ADR-002 | `BigDecimal` + `Money` VO + `NUMERIC` no banco | Precisão decimal obrigatória em ambiente financeiro |
+| ADR-002 | `BigDecimal` + `Dinheiro` VO + `NUMERIC` no banco | Precisão decimal obrigatória em ambiente financeiro |
 | ADR-003 | Expoente decimal com precisão controlada | Potência decimal não é nativa em BigDecimal; erro limitado e corrigido no arredondamento final |
 | ADR-004 | Strategy Pattern para spreads por tipo de recebível | Open/Closed; novos produtos sem tocar o motor |
 | ADR-005 | Optimistic Locking para liquidação | Conflito raro; falha rápida; mais escalável que lock pessimista |
@@ -503,8 +541,8 @@ CREATE INDEX idx_liquidacao_periodo ON liquidacao (created_at);
 
 ## 8. Ordem de Implementação Sugerida (Roadmap)
 
-1. **Fase 1 — Fundação:** modelagem de domínio, `Money`, esqueleto hexagonal, migrações Flyway, tratamento global de exceções.
-2. **Fase 2 — Câmbio:** entidades, repos, casos de uso, endpoints de taxa, mock de provedor.
+1. **Fase 1 — Fundação:** modelagem de domínio, `Dinheiro`, esqueleto hexagonal, migrações Flyway, tratamento global de exceções.
+2. **Fase 2 — Câmbio:** entidades, repositórios, casos de uso, endpoints de taxa, mock de provedor.
 3. **Fase 3 — Precificação:** estratégias, motor, simulação, testes unitários da fórmula (duplicata/cheque, cross-currency).
 4. **Fase 4 — Liquidação:** agregado, transação ACID, optimistic locking, idempotência, auditoria.
 5. **Fase 5 — Extrato:** SQL nativo, cursor, filtros, índices.

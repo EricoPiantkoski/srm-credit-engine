@@ -9,7 +9,6 @@ services:
       - "5656:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
-      - ./backend/src/main/resources/db/migration:/docker-entrypoint-initdb.d:ro
 
 volumes:
   pgdata:
