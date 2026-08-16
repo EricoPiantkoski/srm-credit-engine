@@ -362,82 +362,85 @@ Regra transversal: nenhum componente visual importa TanStack Query, Zustand ou o
 
 ### 5.1 Diagrama ER (conceitual)
 
-```
-CURRENCY (moedas)
-  1 -----< CURRENCY_RATE (par, taxa, vigência) >----- 1 (par de moedas)
+Convenção: nomes de domínio (tabelas e colunas de negócio) em português; campos técnicos (`id`, `version`, `created_at`) em inglês.
 
-RECEIVABLE_TYPE (tipos de recebível + spread)
-  1 -----< RECEIVABLE (valor face, moeda, vencimento, tipo, versão) >----- 1 (cedente)
+```
+MOEDA (moedas)
+  1 -----< TAXA_CAMBIO (par, taxa, vigência) >----- 1 (par de moedas)
+
+TIPO_RECEBIVEL (tipos de recebível + spread)
+  1 -----< RECEBIVEL (valor face, moeda, vencimento, tipo, versão) >----- 1 (cedente)
       ^
       | (item do lote)
-LIQUIDATION (lote, status, idempotency key)
-  1 -----< LIQUIDATION_ITEM (valor presente, spread aplicado, valor líquido, moeda, taxa, prazo)
+LIQUIDACAO (lote, status, chave idempotência)
+  1 -----< LIQUIDACAO_ITEM (valor presente, spread aplicado, valor líquido, moeda, taxa, prazo)
 ```
 
 ### 5.2 DDL essencial (Flyway)
 
 ```sql
-CREATE TABLE currency (
-    code        VARCHAR(3)  PRIMARY KEY,
-    name        VARCHAR(64) NOT NULL,
-    scale       INT         NOT NULL DEFAULT 2
+CREATE TABLE moeda (
+    codigo VARCHAR(3)  PRIMARY KEY,
+    nome   VARCHAR(64) NOT NULL,
+    escala INT         NOT NULL DEFAULT 2
 );
 
-CREATE TABLE currency_rate (
-    id           BIGSERIAL  PRIMARY KEY,
-    base_code    VARCHAR(3) NOT NULL REFERENCES currency(code),
-    quote_code   VARCHAR(3) NOT NULL REFERENCES currency(code),
-    rate         NUMERIC(19, 8) NOT NULL CHECK (rate > 0),
-    effective_at TIMESTAMPTZ NOT NULL,
-    UNIQUE (base_code, quote_code, effective_at)
+CREATE TABLE taxa_cambio (
+    id             BIGSERIAL      PRIMARY KEY,
+    codigo_base    VARCHAR(3) NOT NULL REFERENCES moeda(codigo),
+    codigo_cotacao VARCHAR(3) NOT NULL REFERENCES moeda(codigo),
+    taxa           NUMERIC(19, 8) NOT NULL CHECK (taxa > 0),
+    vigencia       TIMESTAMPTZ NOT NULL,
+    UNIQUE (codigo_base, codigo_cotacao, vigencia)
 );
 
-CREATE TABLE receivable_type (
-    code   VARCHAR(32) PRIMARY KEY,
-    name   VARCHAR(64) NOT NULL,
+CREATE TABLE tipo_recebivel (
+    codigo VARCHAR(32) PRIMARY KEY,
+    nome   VARCHAR(64) NOT NULL,
     spread NUMERIC(9, 6) NOT NULL
 );
 
-CREATE TABLE receivable (
-    id                BIGSERIAL  PRIMARY KEY,
-    external_ref      VARCHAR(64) NOT NULL UNIQUE,
-    type_code         VARCHAR(32) NOT NULL REFERENCES receivable_type(code),
-    face_value        NUMERIC(19, 4) NOT NULL,
-    currency_code     VARCHAR(3) NOT NULL REFERENCES currency(code),
-    maturity_date     DATE NOT NULL,
-    assignor          VARCHAR(128),
-    version           BIGINT NOT NULL DEFAULT 0
+CREATE TABLE recebivel (
+    id               BIGSERIAL    PRIMARY KEY,
+    referencia_externa VARCHAR(64) NOT NULL UNIQUE,
+    codigo_tipo      VARCHAR(32)  NOT NULL REFERENCES tipo_recebivel(codigo),
+    valor_face       NUMERIC(19, 4) NOT NULL,
+    codigo_moeda     VARCHAR(3)   NOT NULL REFERENCES moeda(codigo),
+    data_vencimento  DATE         NOT NULL,
+    cedente          VARCHAR(128),
+    version          BIGINT       NOT NULL DEFAULT 0
 );
 
-CREATE TABLE liquidation (
-    id                    BIGSERIAL  PRIMARY KEY,
-    liquidation_request_id VARCHAR(64) NOT NULL UNIQUE,
-    status                VARCHAR(16) NOT NULL,
-    created_at            TIMESTAMPTZ NOT NULL DEFAULT now()
+CREATE TABLE liquidacao (
+    id                BIGSERIAL   PRIMARY KEY,
+    chave_idempotencia VARCHAR(64) NOT NULL UNIQUE,
+    status            VARCHAR(16) NOT NULL,
+    created_at        TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
-CREATE TABLE liquidation_item (
-    id             BIGSERIAL PRIMARY KEY,
-    liquidation_id BIGINT NOT NULL REFERENCES liquidation(id),
-    receivable_id  BIGINT NOT NULL REFERENCES receivable(id),
-    present_value  NUMERIC(19, 4) NOT NULL,
-    spread_applied NUMERIC(9, 6) NOT NULL,
-    term_months    NUMERIC(9, 6) NOT NULL,
-    payout_amount  NUMERIC(19, 4) NOT NULL,
-    payout_currency VARCHAR(3) NOT NULL REFERENCES currency(code),
-    rate_applied   NUMERIC(19, 8),
-    UNIQUE (liquidation_id, receivable_id)
+CREATE TABLE liquidacao_item (
+    id                   BIGSERIAL    PRIMARY KEY,
+    liquidacao_id        BIGINT       NOT NULL REFERENCES liquidacao(id),
+    recebivel_id         BIGINT       NOT NULL REFERENCES recebivel(id),
+    valor_presente       NUMERIC(19, 4) NOT NULL,
+    spread_aplicado      NUMERIC(9, 6)  NOT NULL,
+    prazo_meses          NUMERIC(9, 6)  NOT NULL,
+    valor_pagamento      NUMERIC(19, 4) NOT NULL,
+    codigo_moeda_pagamento VARCHAR(3) NOT NULL REFERENCES moeda(codigo),
+    taxa_aplicada        NUMERIC(19, 8),
+    UNIQUE (liquidacao_id, recebivel_id)
 );
 
-CREATE INDEX idx_liquidation_item_created ON liquidation_item (liquidation_id);
-CREATE INDEX idx_receivable_assignor ON receivable (assignor);
-CREATE INDEX idx_liquidation_period ON liquidation (created_at);
+CREATE INDEX idx_taxa_cambio_par_vigencia ON taxa_cambio (codigo_base, codigo_cotacao, vigencia);
+CREATE INDEX idx_recebivel_cedente ON recebivel (cedente);
+CREATE INDEX idx_liquidacao_item_liquidacao ON liquidacao_item (liquidacao_id);
+CREATE INDEX idx_liquidacao_periodo ON liquidacao (created_at);
 ```
 
 ### 5.3 Índices para o extrato
 
 - `(created_at)` para filtro por período;
-- `(assignor)` para filtro por cedente (joins a partir da liquidação);
+- `(cedente)` para filtro por cedente (joins a partir da liquidação);
 - Índice composto na moeda de pagamento para filtro por moeda, definido conforme o plano de consulta real após carga de teste.
 
 ---
