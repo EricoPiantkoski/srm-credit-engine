@@ -27,3 +27,6 @@ target/
 frontend/playwright-report/
 frontend/test-results/
 
+# Checklist de conclusão (documento de trabalho)
+docs/checklist-conclusao.md
+

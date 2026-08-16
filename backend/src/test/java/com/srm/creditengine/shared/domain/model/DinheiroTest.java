@@ -43,7 +43,7 @@ class DinheiroTest {
     void sumsAmountsOfSameCurrency() {
         Dinheiro a = new Dinheiro(new BigDecimal("10.00"), BRL, 2);
         Dinheiro b = new Dinheiro(new BigDecimal("5.00"), BRL, 2);
-        Dinheiro result = a.somar(b);
+        Dinheiro result = a.add(b);
         assertThat(result.valor()).isEqualByComparingTo("15.00");
         assertThat(result.moeda()).isEqualTo(BRL);
     }
@@ -52,7 +52,7 @@ class DinheiroTest {
     void rejectsSumOfDifferentCurrencies() {
         Dinheiro brl = new Dinheiro(new BigDecimal("10.00"), BRL, 2);
         Dinheiro usd = new Dinheiro(new BigDecimal("5.00"), USD, 2);
-        assertThatThrownBy(() -> brl.somar(usd))
+        assertThatThrownBy(() -> brl.add(usd))
             .isInstanceOf(IncompatibleCurrenciesException.class)
             .hasMessageContaining("Cannot operate on amounts of different currencies");
     }
@@ -60,16 +60,16 @@ class DinheiroTest {
     @Test
     void multipliesPreservingCurrencyAndEscala() {
         Dinheiro dinheiro = new Dinheiro(new BigDecimal("10.00"), BRL, 2);
-        Dinheiro result = dinheiro.multiplicar(new BigDecimal("1.5"));
+        Dinheiro result = dinheiro.multiply(new BigDecimal("1.5"));
         assertThat(result.valor()).isEqualByComparingTo("15.00");
         assertThat(result.moeda()).isEqualTo(BRL);
     }
 
     @Test
-    void rejectsNullFator() {
+    void rejectsNullFactor() {
         Dinheiro dinheiro = new Dinheiro(new BigDecimal("10.00"), BRL, 2);
-        assertThatThrownBy(() -> dinheiro.multiplicar(null))
+        assertThatThrownBy(() -> dinheiro.multiply(null))
             .isInstanceOf(NullPointerException.class)
-            .hasMessage("fator must not be null");
+            .hasMessage("factor must not be null");
     }
 }

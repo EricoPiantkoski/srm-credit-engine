@@ -13,6 +13,7 @@
 - Documentação: Swagger e OpenAPI
 - Observabilidade: Prometheus e Grafana
 - Migração: Flyway
+- Integrações com Feign Client
 
 ## Prioridade de regras
 
