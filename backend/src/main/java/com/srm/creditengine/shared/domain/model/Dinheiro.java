@@ -18,23 +18,23 @@ public record Dinheiro(BigDecimal valor, CodigoMoeda moeda, int escala) {
         valor = valor.setScale(escala, RoundingMode.HALF_EVEN);
     }
 
-    public Dinheiro somar(Dinheiro outro) {
-        validarMesmaMoeda(outro);
-        return new Dinheiro(valor.add(outro.valor), moeda, escala);
+    public Dinheiro add(Dinheiro other) {
+        validateSameMoeda(other);
+        return new Dinheiro(valor.add(other.valor), moeda, escala);
     }
 
-    public Dinheiro multiplicar(BigDecimal fator) {
-        validarFator(fator);
-        return new Dinheiro(valor.multiply(fator), moeda, escala);
+    public Dinheiro multiply(BigDecimal factor) {
+        validateFactor(factor);
+        return new Dinheiro(valor.multiply(factor), moeda, escala);
     }
 
-    private void validarMesmaMoeda(Dinheiro outro) {
-        if (!moeda.equals(outro.moeda)) {
-            throw new IncompatibleCurrenciesException(moeda, outro.moeda);
+    private void validateSameMoeda(Dinheiro other) {
+        if (!moeda.equals(other.moeda)) {
+            throw new IncompatibleCurrenciesException(moeda, other.moeda);
         }
     }
 
-    private void validarFator(BigDecimal fator) {
-        Objects.requireNonNull(fator, "fator must not be null");
+    private void validateFactor(BigDecimal factor) {
+        Objects.requireNonNull(factor, "factor must not be null");
     }
 }
