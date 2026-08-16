@@ -1,11 +1,27 @@
 server:
   port: ${PORT:8080}
 
+app:
+  cors:
+    allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:5173}
+  cambio:
+    provider:
+      base-url: ${BCB_PTAX_BASE_URL:https://olinda.bcb.gov.br/olinda/servico/PTAX/versao/v1/odata}
+      timeout-ms: ${BCB_PTAX_TIMEOUT_MS:5000}
+      quote-currency: ${BCB_PTAX_QUOTE_CURRENCY:USD}
+
 spring:
   application:
     name: srm-credit-engine
+  cloud:
+    openfeign:
+      client:
+        config:
+          default:
+            connect-timeout: ${app.cambio.provider.timeout-ms}
+            read-timeout: ${app.cambio.provider.timeout-ms}
   datasource:
-    url: ${DB_URL:jdbc:postgresql://localhost:5432/srm_credit}
+    url: ${DB_URL:jdbc:postgresql://localhost:5656/srm_credit}
     username: ${DB_USERNAME:postgres}
     password: ${DB_PASSWORD:postgres}
   flyway:

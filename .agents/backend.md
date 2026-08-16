@@ -1,6 +1,7 @@
 # Architecture and operation methodology
 
 ## Stack
+
 - Linguagem: Java 21
 - Framework: Spring Boot 3
 - Banco de dados: PostgreSQL
@@ -12,20 +13,23 @@
 - Documentação: Swagger e OpenAPI
 - Observabilidade: Prometheus e Grafana
 - Migração: Flyway
+- Integrações com Feign Client
 
 ## Prioridade de regras
+
 1. Priorize requisitos explícitos do usuário, correção e segurança.
 2. Preserve as convenções existentes do projeto.
 
 ## Implementações
+
 - Se a alteração solicitada for complexa, a sugestão de implementação deve ser exibida em detalhes no arquivo .docs/implementation_plan.md, que deve ser sempre atualizado em sua totalidade com a nova solicitação. Se esse for o caso, não atue e aguarde o usuário aprovar o implementation_plan.md
-    - Considere complexa uma alteração que envolva múltiplos módulos, contratos de API, modelo de dados, autenticação, integrações externas, migrações ou risco relevante de regressão.
+  - Considere complexa uma alteração que envolva múltiplos módulos, contratos de API, modelo de dados, autenticação, integrações externas, migrações ou risco relevante de regressão.
 - Não bloqueie tarefas simples nem crie arquivos de planejamento sem necessidade.
 - Aplique os seguintes princípios de forma pragmática, sem criar complexidade
 ou abstrações desnecessárias:
-    - Codebase & Sincronização: 
-        - NUNCA faça commit ou push sem solicitação explícita.
-        - Antes de propor ou gerar qualquer nova alteração de código, você DEVE executar o seguinte protocolo:
+  - Codebase & Sincronização:
+    - NUNCA faça commit ou push sem solicitação explícita.
+    - Antes de propor ou gerar qualquer nova alteração de código, você DEVE executar o seguinte protocolo:
             1. Monitoramento Semântico de Escopo:
                 - Rastreie ativamente o objetivo da janela atual de conversa (ex: "Construindo o endpoint de login"). Se o usuário introduzir um novo requisito arquitetural, mudar de domínio, ou pedir para iniciar uma funcionalidade não relacionada, você deve classificar isso como uma Mudança de Contexto.
             2. Validação de Estado:
@@ -56,16 +60,20 @@ ou abstrações desnecessárias:
 - Mantenha a lógica de negócio independente de framework, banco ou provedor de infraestrutura sempre que isso não aumentar complexidade injustificada.
 - Priorize código legível, coeso e simples. Evite refatorações ou abstrações fora do escopo da tarefa.
 - Quando houver mudança relevante na arquitetura, API, modelo de dados, configuração ou operação, (crie se não existir) atualize o arquivo /docs/TechDoc.md com as alterações realizadas, de forma técnica e coesa.
+- Idioma de código: identificadores, mensagens de erro, mensagens de validação e logs sempre em inglês (exceto palavras reservadas de domínio em português). Prosa de documentação e comunicação com o usuário permanecem em PT-BR.
 
 ## Arquitetura Hexagonal
+
 - Separe as responsabilidades em camadas de aplicação, negócio e persistência.
 - Controllers devem atuar como adapters de entrada; casos de uso pertencem à camada de aplicação; persistência é acessada por portas e adapters de saída.
 - Relatórios simples podem omitir a camada de negócio, mas devem passar pela camada de aplicação para preservar autorização, contratos e controle da consulta.
 
 ## Tratamento de Exceções
+
 - Trate erros esperados com respostas HTTP apropriadas e erros inesperados com logging contextual, sem expor detalhes internos. Nunca ignore exceções nem mantenha o fluxo após uma falha que comprometa a consistência da operação
 
 ## Testes
+
 - Defina a estratégia de testes conforme o tipo e o risco da alteração.
 - Cubra regras de negócio e casos de erro com testes unitários em JUnit.
 - Use Mockito apenas para isolar dependências externas ao componente testado.
@@ -79,6 +87,7 @@ ou abstrações desnecessárias:
 - Verifique que os testes relevantes foram criados ou atualizados e que `./mvnw verify` foi executado com sucesso. Se o comando não puder ser executado, informe o motivo, as verificações realizadas e as lacunas restantes.
 
 ## Critérios de Aceite
+
 - Antes de declarar a tarefa concluída, verifique cada critério aplicável abaixo. Se algum critério falhar, corrija a implementação e repita a verificação sem ampliar o escopo sem autorização. Não entregue a tarefa apenas reportando falhas conhecidas; informe somente limitações que não puderem ser resolvidas no escopo atual.
 - Usabilidade: endpoints possuem contratos OpenAPI atualizados para todos os endpoints, códigos HTTP consistentes e formato padronizado de erro; entradas inválidas retornam mensagens associadas aos campos incorretos.
 - Segurança: autenticação e autorização são aplicadas conforme o recurso; entradas são validadas; consultas são parametrizadas; secrets e dados sensíveis não aparecem no código, nas respostas ou nos logs; erros não expõem detalhes internos.
