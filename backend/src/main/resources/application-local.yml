@@ -1,6 +1,10 @@
 app:
   cors:
     allowed-origins: http://localhost:5173
+  security:
+    jwt:
+      secret: local-development-secret-change-me-in-production-0000000000
+    expose-docs: true
 
 spring:
   datasource:

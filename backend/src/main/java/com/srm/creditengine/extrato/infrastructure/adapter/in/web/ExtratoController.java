@@ -10,14 +10,17 @@ import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
+import jakarta.validation.constraints.Max;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.ResponseEntity;
+import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
+@Validated
 @Tag(name = "Extrato de Liquidações", description = "Consulta analítica de liquidações")
 @RequestMapping("/api/liquidacoes")
 public class ExtratoController {
@@ -41,7 +44,7 @@ public class ExtratoController {
             @RequestParam(required = false) String cedente,
             @RequestParam(required = false) String codigoMoedaPagamento,
             @RequestParam(required = false) Long lastId,
-            @RequestParam(defaultValue = "50") int limit) {
+            @RequestParam(defaultValue = "20") @Max(ExtratoFiltros.MAX_LIMIT) int limit) {
         List<ExtratoLiquidacao> result = extratoLiquidacoes.consultar(new ExtratoFiltros(
             dataInicial != null ? dataInicial : LocalDate.of(1970, 1, 1),
             dataFinal != null ? dataFinal : LocalDate.of(9999, 12, 31),

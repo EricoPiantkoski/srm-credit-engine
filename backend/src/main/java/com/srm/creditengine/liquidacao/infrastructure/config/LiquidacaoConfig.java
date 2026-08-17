@@ -24,4 +24,5 @@ public class LiquidacaoConfig {
     public ConsultarLiquidacao consultarLiquidacao(RepositorioLiquidacao repositorioLiquidacao) {
         return new ConsultarLiquidacao(repositorioLiquidacao);
     }
+
 }

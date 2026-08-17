@@ -133,4 +133,5 @@ class LiquidacaoRepositoryAdapterTest {
         assertThat(adapter.obtainById(liquidacaoJpaRepository.findAll().get(0).getId())).isPresent();
         assertThat(liquidacaoJpaRepository.findAll()).hasSize(1);
     }
+
 }

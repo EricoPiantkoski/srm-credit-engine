@@ -6,6 +6,8 @@ import com.srm.creditengine.liquidacao.domain.RepositorioLiquidacao;
 import com.srm.creditengine.liquidacao.domain.StatusLiquidacao;
 import java.util.List;
 import java.util.Optional;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -44,6 +46,14 @@ public class LiquidacaoRepositoryAdapter implements RepositorioLiquidacao {
     @Transactional(readOnly = true)
     public Optional<Liquidacao> obtainById(Long id) {
         return jpaRepository.findWithItensById(id).map(this::toDomain);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public RepositorioLiquidacao.PageResult list(int page, int size) {
+        Page<LiquidacaoJpaEntity> result = jpaRepository.findAllByOrderByCreatedAtDesc(PageRequest.of(page, size));
+        List<Liquidacao> content = result.getContent().stream().map(this::toDomain).toList();
+        return new RepositorioLiquidacao.PageResult(content, result.getTotalElements(), page, size, result.getTotalPages());
     }
 
     private Liquidacao toDomain(LiquidacaoJpaEntity entity) {
