@@ -14,10 +14,18 @@ public class Recebivel {
     private final LocalDate dataVencimento;
     private final String cedente;
     private final Long version;
+    private final StatusRecebivel status;
 
     public Recebivel(Long id, String referenciaExterna, String codigoTipo,
                      Dinheiro valorFace, LocalDate dataVencimento, String cedente, Long version) {
-        validate(referenciaExterna, codigoTipo, valorFace, dataVencimento, cedente, version);
+        this(id, referenciaExterna, codigoTipo, valorFace, dataVencimento, cedente, version,
+            StatusRecebivel.DISPONIVEL);
+    }
+
+    public Recebivel(Long id, String referenciaExterna, String codigoTipo,
+                     Dinheiro valorFace, LocalDate dataVencimento, String cedente, Long version,
+                     StatusRecebivel status) {
+        validate(referenciaExterna, codigoTipo, valorFace, dataVencimento, cedente, version, status);
         this.id = id;
         this.referenciaExterna = referenciaExterna;
         this.codigoTipo = codigoTipo;
@@ -25,10 +33,12 @@ public class Recebivel {
         this.dataVencimento = dataVencimento;
         this.cedente = cedente;
         this.version = version;
+        this.status = status;
     }
 
     private void validate(String referenciaExterna, String codigoTipo, Dinheiro valorFace,
-                          LocalDate dataVencimento, String cedente, Long version) {
+                          LocalDate dataVencimento, String cedente, Long version,
+                          StatusRecebivel status) {
         Objects.requireNonNull(referenciaExterna, "referenciaExterna must not be null");
         if (referenciaExterna.isBlank()) {
             throw new IllegalArgumentException("referenciaExterna must not be blank");
@@ -47,6 +57,7 @@ public class Recebivel {
             throw new IllegalArgumentException("cedente must not be blank");
         }
         Objects.requireNonNull(version, "version must not be null");
+        Objects.requireNonNull(status, "status must not be null");
     }
 
     public long prazoInDays(LocalDate dataPrecificacao) {
@@ -60,4 +71,5 @@ public class Recebivel {
     public LocalDate dataVencimento() { return dataVencimento; }
     public String cedente() { return cedente; }
     public Long version() { return version; }
+    public StatusRecebivel status() { return status; }
 }

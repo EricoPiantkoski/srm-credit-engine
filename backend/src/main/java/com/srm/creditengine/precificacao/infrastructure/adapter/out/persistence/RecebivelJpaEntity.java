@@ -36,6 +36,9 @@ public class RecebivelJpaEntity {
     @Column(name = "cedente", nullable = false, length = 128)
     private String cedente;
 
+    @Column(name = "status", nullable = false, length = 16)
+    private String status;
+
     @Version
     @Column(name = "version", nullable = false)
     private Long version;
@@ -43,13 +46,14 @@ public class RecebivelJpaEntity {
     protected RecebivelJpaEntity() {}
 
     public RecebivelJpaEntity(String referenciaExterna, String codigoTipo, BigDecimal valorFace,
-                              String codigoMoeda, LocalDate dataVencimento, String cedente) {
+                              String codigoMoeda, LocalDate dataVencimento, String cedente, String status) {
         this.referenciaExterna = referenciaExterna;
         this.codigoTipo = codigoTipo;
         this.valorFace = valorFace;
         this.codigoMoeda = codigoMoeda;
         this.dataVencimento = dataVencimento;
         this.cedente = cedente;
+        this.status = status;
     }
 
     public Long getId() {
@@ -78,6 +82,14 @@ public class RecebivelJpaEntity {
 
     public String getCedente() {
         return cedente;
+    }
+
+    public String getStatus() {
+        return status;
+    }
+
+    public void setStatus(String status) {
+        this.status = status;
     }
 
     public Long getVersion() {

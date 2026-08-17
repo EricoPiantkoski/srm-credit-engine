@@ -228,13 +228,53 @@ app:
 
 ---
 
+## 2A. Módulo Liquidação (`com.srm.creditengine.liquidacao`)
+
+### 2A.1 Responsabilidade
+
+Liquidar um lote de recebíveis de forma atômica e idempotente: precifica cada recebível (reutilizando `PrecificacaoEngine` + `PrecificacaoStrategyResolver`), aplica câmbio quando a moeda de pagamento difere da do ativo, persiste o cabeçalho + itens em uma única transação e oferece consulta por id e extrato por período.
+
+### 2A.2 Estrutura (arquitetura hexagonal)
+
+- **Domínio**: `Liquidacao`, `ItemLiquidacao`, `StatusLiquidacao`, porta `RepositorioLiquidacao`; exceções `LiquidacaoConflictException` (idempotência), `LiquidacaoVersionConflictException` (concorrência), `LiquidacaoNotFoundException`, `RecebivelNotFoundException`.
+- **Aplicação**: `LiquidarLote` (`@Transactional`, idempotência por `chaveIdempotencia`, precificação via estratégia, bump de versão por recebível), `ConsultarLiquidacao`.
+- **Infraestrutura**: `LiquidacaoJpaEntity`/`LiquidacaoItemJpaEntity`, `LiquidacaoJpaRepository`, `LiquidacaoRepositoryAdapter` (também `tryBumpVersion` na porta `RecebivelRepository`), `LiquidacaoConfig`, `ExtratoController`/`LiquidacaoController`.
+
+### 2A.3 Regras de negócio
+
+- Cada item é precificado pelo `PrecificacaoEngine`; câmbio aplicado quando `moedaPagamento != moeda do ativo` (via `CambioGateway`).
+- **Concorrência**: lock otimista por recebível — `tryBumpVersion(id, expectedVersion)` incrementa `version` apenas se ainda igual; 0 linhas → `LiquidacaoVersionConflictException` → 409. Sem retry automático: o cliente reprocessa com dados atuais (precificação é stateless). Detalhes no ADR `architecture_decision_records-optimistic_locking_liquidacao.md`.
+- **Idempotência**: `chave_idempotencia` UNIQUE; chave duplicada → `LiquidacaoConflictException` → 409.
+- `createdAt` controlado por aplicação (`Instant`).
+
+### 2A.4 Contratos de API
+
+- `POST /api/liquidacoes` — liquida um lote (201/400/409/422).
+- `GET /api/liquidacoes/{id}` — consulta uma liquidação (200/404).
+- `GET /api/liquidacoes/extrato?dataInicial=&dataFinal=&status=&cedente=&lastId=&limit=` — extrato por item com paginação por cursor (200/400).
+- `GlobalExceptionHandler`: `LiquidacaoConflictException`/`LiquidacaoVersionConflictException` → 409, `LiquidacaoNotFoundException` → 404, `RecebivelNotFoundException` → 422.
+
+### 2A.5 Persistência
+
+- Tabelas `liquidacao`/`liquidacao_item` (V1) mapeadas em JPA com `@EntityGraph` para carregar itens; `version` no cabeçalho.
+- Extrato via **SQL nativo** (`JdbcTemplate`) em `ConsultaLiquidacaoAdapter`: `li.id > :lastId ORDER BY li.id LIMIT :limit`, filtros por período/status/cedente, valores parametrizados.
+
+### 2A.6 Testes
+
+- Domínio/aplicação: `LiquidacaoTest`, `ItemLiquidacaoTest`, `LiquidarLoteTest`, `ConsultarLiquidacaoTest`.
+- Web (MockMvc): `LiquidacaoControllerTest`, `ExtratoControllerTest`.
+- Integração (Testcontainers): `LiquidacaoRepositoryAdapterTest` (inclui `tryBumpVersion`/conflito), `ConsultaLiquidacaoAdapterTest` (filtros + cursor).
+- Contrato OpenAPI: `OpenApiContractTest`.
+
+---
+
 ## 3. Stack e dependências
 
 - Java 21, Spring Boot 3.5.16, Spring Cloud **2025.0.3** (Northfields, Boot 3.5.x) via BOM `spring-cloud-dependencies`.
 - `spring-cloud-starter-openfeign` para integrações HTTP externas; `spring-cloud-starter-circuitbreaker-resilience4j` + `spring-retry` para resiliência; `wiremock-standalone` (3.13.2) como dependência de teste.
 - `springdoc-openapi-starter-webmvc-ui` (2.8.17) com anotações `@Operation`/`@ApiResponse`/`@Tag` nos controllers (Swagger UI em `/swagger-ui.html`, spec em `/v3/api-docs`).
-- JaCoCo ≥ 90% de cobertura de linha (atual: ~99%).
-- Backend: 152 testes (unitários, web, integração, contrato), `./mvnw verify` BUILD SUCCESS.
+- JaCoCo ≥ 90% de cobertura de linha (atual: ~98%).
+- Backend: 187 testes (unitários, web, integração, contrato), `./mvnw verify` BUILD SUCCESS.
 
 ## 4. Operação
 
