@@ -6,6 +6,9 @@ import com.srm.creditengine.cambio.domain.ParMoedas;
 import com.srm.creditengine.cambio.domain.exception.ExchangeRateConflictException;
 import com.srm.creditengine.cambio.domain.exception.ExchangeRateNotFoundException;
 import com.srm.creditengine.cambio.domain.exception.ExchangeRateProviderUnavailableException;
+import com.srm.creditengine.liquidacao.domain.exception.LiquidacaoConflictException;
+import com.srm.creditengine.liquidacao.domain.exception.LiquidacaoNotFoundException;
+import com.srm.creditengine.liquidacao.domain.exception.LiquidacaoVersionConflictException;
 import com.srm.creditengine.precificacao.domain.exception.ExchangeRateUnavailableException;
 import com.srm.creditengine.precificacao.domain.exception.ReceivableConflictException;
 import com.srm.creditengine.shared.domain.exception.IncompatibleCurrenciesException;
@@ -65,6 +68,33 @@ class GlobalExceptionHandlerTest {
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
         assertThat(response.getBody().message()).contains("REF-001");
+    }
+
+    @Test
+    void liquidacaoConflictMapsToConflict() {
+        ResponseEntity<GlobalExceptionHandler.ErrorBody> response =
+            handler.handleLiquidacaoConflict(new LiquidacaoConflictException("CHAVE-001"));
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
+        assertThat(response.getBody().message()).contains("CHAVE-001");
+    }
+
+    @Test
+    void liquidacaoVersionConflictMapsToConflict() {
+        ResponseEntity<GlobalExceptionHandler.ErrorBody> response =
+            handler.handleLiquidacaoVersionConflict(new LiquidacaoVersionConflictException(10L, 3L));
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
+        assertThat(response.getBody().message()).contains("Reprocess");
+    }
+
+    @Test
+    void liquidacaoNotFoundMapsToNotFound() {
+        ResponseEntity<GlobalExceptionHandler.ErrorBody> response =
+            handler.handleLiquidacaoNotFound(new LiquidacaoNotFoundException(99L));
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
+        assertThat(response.getBody().message()).contains("99");
     }
 
     @Test

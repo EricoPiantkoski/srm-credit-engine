@@ -59,8 +59,10 @@ class RecebivelRepositoryAdapterTest {
 
     @Test
     void savesAndLoadsRecebivel() {
-        adapter.save(recebivel("REF-001", "Cedente A", "BRL", "DUPLICATA_MERCANTIL"));
+        Recebivel saved = adapter.save(recebivel("REF-001", "Cedente A", "BRL", "DUPLICATA_MERCANTIL"));
 
+        assertThat(saved.id()).isNotNull();
+        assertThat(saved.referenciaExterna()).isEqualTo("REF-001");
         assertThat(adapter.existsReferenciaExterna("REF-001")).isTrue();
         assertThat(adapter.existsReferenciaExterna("REF-002")).isFalse();
 

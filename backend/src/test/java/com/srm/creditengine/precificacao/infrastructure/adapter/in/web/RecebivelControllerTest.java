@@ -56,7 +56,8 @@ class RecebivelControllerTest {
             .andExpect(jsonPath("$.valorFace").value(1000.00))
             .andExpect(jsonPath("$.codigoMoeda").value("BRL"))
             .andExpect(jsonPath("$.dataVencimento").value("2026-09-15"))
-            .andExpect(jsonPath("$.cedente").value("Cedente"));
+            .andExpect(jsonPath("$.cedente").value("Cedente"))
+            .andExpect(jsonPath("$.status").value("DISPONIVEL"));
     }
 
     @Test

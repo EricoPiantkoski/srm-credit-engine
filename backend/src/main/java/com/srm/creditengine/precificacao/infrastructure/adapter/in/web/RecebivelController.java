@@ -69,7 +69,7 @@ public class RecebivelController {
         return new RecebivelResponse(
             recebivel.id(), recebivel.referenciaExterna(), recebivel.codigoTipo(),
             recebivel.valorFace().valor(), recebivel.valorFace().moeda().codigo(),
-            recebivel.dataVencimento(), recebivel.cedente());
+            recebivel.dataVencimento(), recebivel.cedente(), recebivel.status().name());
     }
 
     public record RecebivelCreateRequest(
@@ -82,5 +82,5 @@ public class RecebivelController {
 
     public record RecebivelResponse(
         Long id, String referenciaExterna, String codigoTipo, BigDecimal valorFace,
-        String codigoMoeda, LocalDate dataVencimento, String cedente) {}
+        String codigoMoeda, LocalDate dataVencimento, String cedente, String status) {}
 }
