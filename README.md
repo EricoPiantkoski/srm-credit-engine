@@ -66,7 +66,7 @@ backend/src/main/java/com/srm/creditengine/
 - Swagger/OpenAPI em `/swagger-ui.html` (springdoc).
 - Testes de integração com Testcontainers (PostgreSQL isolado).
 - Gate de cobertura JaCoCo ≥ 90% no `./mvnw verify`.
-- Configuração por variáveis de ambiente (`DB_URL`, `DB_USERNAME`, `DB_PASSWORD`, `PORT`).
+- Configuração por variáveis de ambiente (`DB_URL`, `DB_USERNAME`, `DB_PASSWORD`, `PORT`, `CORS_ALLOWED_ORIGINS`); perfil `local` traz os valores de desenvolvimento (banco/CORS) via `application-local.yml`.
 
 ### Frontend — Organização por Features
 
@@ -97,7 +97,7 @@ docker compose up -d
 Backend (porta 8080):
 
 ```bash
-cd backend && ./mvnw spring-boot:run
+cd backend && ./mvnw spring-boot:run -Dspring-boot.run.profiles=local
 ```
 
 Frontend (dev server):

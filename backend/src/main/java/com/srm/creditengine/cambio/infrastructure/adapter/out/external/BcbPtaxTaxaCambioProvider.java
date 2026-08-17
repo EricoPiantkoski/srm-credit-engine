@@ -6,6 +6,7 @@ import com.srm.creditengine.cambio.domain.TaxaCambioProvider;
 import com.srm.creditengine.cambio.domain.exception.ExchangeRateProviderUnavailableException;
 import com.srm.creditengine.shared.domain.model.CodigoMoeda;
 import feign.FeignException;
+import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.Instant;
@@ -36,6 +37,7 @@ public class BcbPtaxTaxaCambioProvider implements TaxaCambioProvider {
     }
 
     @Override
+    @CircuitBreaker(name = "bcbPtax", fallbackMethod = "obtainFallback")
     public Optional<TaxaCambio> obtain(ParMoedas par) {
         if (!supports(par)) {
             return Optional.empty();
@@ -79,6 +81,10 @@ public class BcbPtaxTaxaCambioProvider implements TaxaCambioProvider {
 
     private Instant parseTimestamp(String value) {
         return LocalDateTime.parse(value.replace(' ', 'T')).atZone(timeZone).toInstant();
+    }
+
+    private Optional<TaxaCambio> obtainFallback(ParMoedas par, Throwable t) {
+        throw new ExchangeRateProviderUnavailableException(par);
     }
 
     public record PtaxResponse(List<PtaxQuote> value) {}
