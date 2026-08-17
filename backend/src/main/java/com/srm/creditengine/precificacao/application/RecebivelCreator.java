@@ -31,8 +31,7 @@ public class RecebivelCreator {
         Recebivel recebivel = new Recebivel(null, input.referenciaExterna(), input.codigoTipo(),
             new Dinheiro(input.valorFace(), new CodigoMoeda(input.codigoMoeda()), escala),
             input.dataVencimento(), input.cedente(), 0L);
-        repository.save(recebivel);
-        return recebivel;
+        return repository.save(recebivel);
     }
 
     private void validateTipo(String codigoTipo) {

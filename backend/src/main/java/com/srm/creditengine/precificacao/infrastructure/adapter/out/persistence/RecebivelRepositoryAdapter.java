@@ -4,6 +4,7 @@ import com.srm.creditengine.cambio.infrastructure.adapter.out.persistence.MoedaJ
 import com.srm.creditengine.precificacao.domain.Recebivel;
 import com.srm.creditengine.precificacao.domain.RecebivelQueryCriteria;
 import com.srm.creditengine.precificacao.domain.RecebivelRepository;
+import com.srm.creditengine.precificacao.domain.StatusRecebivel;
 import com.srm.creditengine.shared.domain.model.CodigoMoeda;
 import com.srm.creditengine.shared.domain.model.Dinheiro;
 import java.util.List;
@@ -11,6 +12,7 @@ import java.util.Optional;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.annotation.Transactional;
 
 @Component
 public class RecebivelRepositoryAdapter implements RecebivelRepository {
@@ -25,11 +27,12 @@ public class RecebivelRepositoryAdapter implements RecebivelRepository {
     }
 
     @Override
-    public void save(Recebivel recebivel) {
+    public Recebivel save(Recebivel recebivel) {
         RecebivelJpaEntity entity = new RecebivelJpaEntity(
             recebivel.referenciaExterna(), recebivel.codigoTipo(), recebivel.valorFace().valor(),
-            recebivel.valorFace().moeda().codigo(), recebivel.dataVencimento(), recebivel.cedente());
-        jpaRepository.save(entity);
+            recebivel.valorFace().moeda().codigo(), recebivel.dataVencimento(), recebivel.cedente(),
+            recebivel.status().name());
+        return toDomain(jpaRepository.save(entity));
     }
 
     @Override
@@ -47,6 +50,12 @@ public class RecebivelRepositoryAdapter implements RecebivelRepository {
         PageRequest pageable = PageRequest.of(criteria.page(), criteria.size());
         Page<RecebivelJpaEntity> page = find(criteria, pageable);
         return page.getContent().stream().map(this::toDomain).toList();
+    }
+
+    @Override
+    @Transactional
+    public boolean marcarLiquidado(Long id, Long expectedVersion) {
+        return jpaRepository.marcarLiquidado(id, expectedVersion) > 0;
     }
 
     private Page<RecebivelJpaEntity> find(RecebivelQueryCriteria criteria, PageRequest pageable) {
@@ -87,6 +96,7 @@ public class RecebivelRepositoryAdapter implements RecebivelRepository {
         return new Recebivel(
             entity.getId(), entity.getReferenciaExterna(), entity.getCodigoTipo(),
             new Dinheiro(entity.getValorFace(), new CodigoMoeda(entity.getCodigoMoeda()), escala),
-            entity.getDataVencimento(), entity.getCedente(), entity.getVersion());
+            entity.getDataVencimento(), entity.getCedente(), entity.getVersion(),
+            StatusRecebivel.valueOf(entity.getStatus()));
     }
 }

@@ -51,10 +51,15 @@ class RecebivelCreatorTest {
             .thenReturn(Optional.of(new TipoRecebivel("DUPLICATA_MERCANTIL", "Duplicata Mercantil", new BigDecimal("0.015"))));
         when(moedaCatalog.scaleOf(new CodigoMoeda("BRL"))).thenReturn(2);
         when(repository.existsReferenciaExterna("REF-001")).thenReturn(false);
+        when(repository.save(any(Recebivel.class))).thenAnswer(invocation -> {
+            Recebivel input = invocation.getArgument(0);
+            return new Recebivel(1L, input.referenciaExterna(), input.codigoTipo(), input.valorFace(),
+                input.dataVencimento(), input.cedente(), input.version());
+        });
 
         Recebivel recebivel = creator().create(INPUT);
 
-        assertThat(recebivel.id()).isNull();
+        assertThat(recebivel.id()).isEqualTo(1L);
         assertThat(recebivel.referenciaExterna()).isEqualTo("REF-001");
         assertThat(recebivel.codigoTipo()).isEqualTo("DUPLICATA_MERCANTIL");
         assertThat(recebivel.valorFace().valor()).isEqualByComparingTo("1000.00");

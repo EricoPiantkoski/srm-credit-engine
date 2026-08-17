@@ -48,10 +48,14 @@ class OpenApiContractTest {
             .contains("\"Simula a precificação de um ativo\"")
             .contains("\"Cria um recebível\"")
             .contains("\"Lista recebíveis\"")
+            .contains("\"Liquida um lote de recebíveis\"")
+            .contains("\"Consulta uma liquidação\"")
+            .contains("\"Consulta o extrato de liquidações\"")
             .contains("\"Provedor externo indisponível\"")
             .contains("\"Já existe taxa vigente para o par informado\"")
             .contains("\"/api/taxas-cambio\"")
             .contains("\"/api/simulacoes/precificacao\"")
-            .contains("\"/api/recebiveis\"");
+            .contains("\"/api/recebiveis\"")
+            .contains("\"/api/liquidacoes\"");
     }
 }

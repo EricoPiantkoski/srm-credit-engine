@@ -4,8 +4,16 @@ import java.util.Optional;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 
 public interface RecebivelJpaRepository extends JpaRepository<RecebivelJpaEntity, Long> {
+
+    @Modifying
+    @Query("update RecebivelJpaEntity r set r.version = r.version + 1, r.status = 'LIQUIDADO' "
+        + "where r.id = :id and r.version = :expectedVersion and r.status = 'DISPONIVEL'")
+    int marcarLiquidado(@Param("id") Long id, @Param("expectedVersion") Long expectedVersion);
 
     boolean existsByReferenciaExterna(String referenciaExterna);
 
