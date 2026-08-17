@@ -13,17 +13,14 @@ import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
+import jakarta.validation.constraints.Max;
+import jakarta.validation.constraints.Min;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.List;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PathVariable;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
 
 @RestController
 @Tag(name = "Liquidações", description = "Liquidação de lotes de recebíveis")
@@ -49,6 +46,21 @@ public class LiquidacaoController {
         Liquidacao liquidacao = liquidarLote.liquidar(new LiquidarLote.LiquidarLoteInput(
             request.chaveIdempotencia(), request.codigoMoedaPagamento(), request.recebiveisIds()));
         return ResponseEntity.status(HttpStatus.CREATED).body(toResponse(liquidacao));
+    }
+
+    @GetMapping
+    @Operation(summary = "Consulta todas as liquidações", description = "Retorna as liquidações ordenadas da mais recente para a mais antiga.")
+    @ApiResponse(responseCode = "200", description = "Liquidações encontradas")
+    public ResponseEntity<LiquidacaoPageResponse> list(
+            @RequestParam(defaultValue = "0") @Min(0) int page,
+            @RequestParam(defaultValue = "20") int size) {
+        if (size != 20 && size != 50 && size != 100) {
+            throw new IllegalArgumentException("size must be 20, 50 or 100");
+        }
+        var result = consultarLiquidacao.list(page, size);
+        return ResponseEntity.ok(new LiquidacaoPageResponse(
+            result.content().stream().map(this::toResponse).toList(), result.page(), result.size(),
+            result.totalElements(), result.totalPages()));
     }
 
     @GetMapping("/{id}")
@@ -92,4 +104,7 @@ public class LiquidacaoController {
     public record LiquidacaoResponse(
         Long id, String chaveIdempotencia, String status, Instant createdAt,
         List<ItemLiquidacaoResponse> itens) {}
+
+    public record LiquidacaoPageResponse(
+        List<LiquidacaoResponse> content, int page, int size, long totalElements, int totalPages) {}
 }

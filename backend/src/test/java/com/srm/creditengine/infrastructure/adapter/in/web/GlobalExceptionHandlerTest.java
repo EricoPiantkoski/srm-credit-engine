@@ -177,12 +177,13 @@ class GlobalExceptionHandlerTest {
     }
 
     @Test
-    void noResourceFoundMapsToNotFound() {
+    void noResourceFoundMapsToNotFoundWithoutLeakingPath() {
         ResponseEntity<GlobalExceptionHandler.ErrorBody> response =
             handler.handleNoResource(new NoResourceFoundException(HttpMethod.POST, "api/taxas-cambio/unknown"));
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
-        assertThat(response.getBody().message()).contains("api/taxas-cambio/unknown");
+        assertThat(response.getBody().message()).isEqualTo("Resource not found.");
+        assertThat(response.getBody().message()).doesNotContain("api/taxas-cambio/unknown");
     }
 
     @Test

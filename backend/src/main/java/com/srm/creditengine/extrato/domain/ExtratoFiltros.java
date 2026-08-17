@@ -12,9 +12,14 @@ public record ExtratoFiltros(
     Long lastId,
     int limit) {
 
+    public static final int MAX_LIMIT = 500;
+
     public ExtratoFiltros {
         if (limit <= 0) {
             throw new IllegalArgumentException("limit must be positive, but was: " + limit);
+        }
+        if (limit > MAX_LIMIT) {
+            throw new IllegalArgumentException("limit must not exceed " + MAX_LIMIT + ", but was: " + limit);
         }
         if (lastId != null && lastId <= 0) {
             throw new IllegalArgumentException("lastId must be positive, but was: " + lastId);

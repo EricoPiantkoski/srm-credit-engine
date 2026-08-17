@@ -1,6 +1,7 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { render, screen } from '@testing-library/react'
 import { describe, expect, it } from 'vitest'
+import { MemoryRouter } from 'react-router-dom'
 
 import HomePage from './HomePage'
 
@@ -10,7 +11,9 @@ function renderPage() {
   })
   return render(
     <QueryClientProvider client={queryClient}>
-      <HomePage />
+      <MemoryRouter>
+        <HomePage />
+      </MemoryRouter>
     </QueryClientProvider>,
   )
 }
@@ -20,5 +23,12 @@ describe('HomePage', () => {
     renderPage()
 
     expect(await screen.findByText('Status do serviço: UP')).toBeInTheDocument()
+  })
+
+  it('links to the operation panels', async () => {
+    renderPage()
+
+    expect(await screen.findByRole('link', { name: /Câmbio/ })).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: /Extrato/ })).toBeInTheDocument()
   })
 })

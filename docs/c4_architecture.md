@@ -100,12 +100,24 @@ flowchart TD
         ExtInf["Infra:\nExtratoController\nConsultaLiquidacaoAdapter (SQL nativo)"]
     end
 
+    subgraph Auth["Módulo Autenticação (com.srm.creditengine.auth)"]
+        AuthApp["Aplicação:\nLogin, Refresh, Logout"]
+        AuthDom["Domínio:\nUsuario, Role, RefreshToken\nUsuarioRepository, TokenProvider\nPasswordHasher, RefreshTokenRepository"]
+        AuthInf["Infra:\nAuthController\nJwtTokenProvider, BcryptPasswordHasher\nUsuarioRepositoryAdapter, RefreshTokenRepositoryAdapter"]
+    end
+
+    subgraph Audit["Módulo Auditoria (com.srm.creditengine.audit)"]
+        AuditDom["Domínio:\nAuditLog, ResultadoAuditoria\nAuditLogRepository"]
+        AuditInf["Infra:\nAuditLogRepositoryAdapter"]
+    end
+
     subgraph Shared["Módulo Compartilhado (com.srm.creditengine.shared)"]
         SharedDom["Domínio:\nDinheiro, CodigoMoeda\nDomainException"]
     end
 
     subgraph Infra["Infraestrutura Global (com.srm.creditengine.infrastructure)"]
         Global["GlobalExceptionHandler\nHealthController\nCorsConfig, OpenApiConfig"]
+        Security["Segurança:\nSecurityConfig\nJwtDecoder\nRateLimitFilter, RequestIdFilter, AuditFilter"]
     end
 
     CambioInf --> CambioApp
@@ -117,6 +129,9 @@ flowchart TD
     ExtApp --> ExtInf
     ExtApp --> LiqDom
     ExtApp --> LiqApp
+    AuthInf --> AuthApp
+    AuthApp --> AuthDom
+    AuditInf --> AuditDom
 
     PrecDom -->|"usa portas do módulo Câmbio"| CambioDom
     PrecInf -->|"CambioGatewayAdapter usa TaxaVigenteReader/Updater"| CambioApp
@@ -131,6 +146,12 @@ flowchart TD
     PrecInf --> Global
     LiqInf --> Global
     ExtInf --> Global
+    AuthInf --> Global
+
+    Security -->|"protege controllers\n(ADMIN)"| AuthDom
+    Security -->|"AuditFilter grava\nvia AuditLogRepository"| AuditDom
+    Security -->|"token de acesso\n(JwtDecoder)"| AuthInf
+    AuthInf -->|"AuthController\n(/api/auth/login|refresh)"| Security
 ```
 
 ### 3.2 Fluxo de uma liquidação (fluxo principal)
@@ -185,6 +206,38 @@ sequenceDiagram
     L-->>A: página
     A-->>E: ExtratoLiquidacao[]
     E-->>UI: 200 OK (com lastId para próxima página)
+```
+
+### 3.4 Fluxo de autenticação (login + refresh rotativo)
+
+```mermaid
+sequenceDiagram
+    participant UI as Frontend React
+    participant A as AuthController
+    participant L as Login/Refresh (use case)
+    participant P as PasswordHasher (BCrypt)
+    participant T as TokenProvider (JWT HS256)
+    participant R as RefreshTokenRepository
+    participant D as PostgreSQL
+
+    UI->>A: POST /api/auth/login {username, password}
+    A->>L: autenticar(username, password)
+    L->>P: verificar senha
+    P-->>L: ok
+    L->>T: gerar accessToken (15min) + refreshToken (7d)
+    L->>R: persistir hash SHA-256 do refresh token
+    R->>D: INSERT refresh_token
+    L-->>A: TokenPair
+    A-->>UI: 200 {accessToken, refreshToken, username, deveTrocarSenha}
+
+    Note over UI: accessToken expira; cliente faz refresh
+    UI->>A: POST /api/auth/refresh {refreshToken}
+    A->>L: rotacionar(refreshToken)
+    L->>R: validar hash + revogar token antigo
+    L->>T: gerar novo par de tokens
+    L->>R: persistir novo refresh token
+    L-->>A: TokenPair
+    A-->>UI: 200 {accessToken, refreshToken}
 ```
 
 ---

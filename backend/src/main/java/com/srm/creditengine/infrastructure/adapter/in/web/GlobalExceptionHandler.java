@@ -16,13 +16,16 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.context.MessageSourceResolvable;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.method.annotation.HandlerMethodValidationException;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 import org.springframework.web.servlet.resource.NoResourceFoundException;
 
+import java.util.Objects;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
@@ -95,6 +98,29 @@ public class GlobalExceptionHandler {
             .body(new ErrorBody(ex.getMessage()));
     }
 
+    @ExceptionHandler(com.srm.creditengine.auth.domain.exception.InvalidCredentialsException.class)
+    public ResponseEntity<ErrorBody> handleInvalidCredentials(
+            com.srm.creditengine.auth.domain.exception.InvalidCredentialsException ex) {
+        return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+            .body(new ErrorBody(ex.getMessage()));
+    }
+
+    @ExceptionHandler(com.srm.creditengine.auth.domain.exception.InvalidRefreshTokenException.class)
+    public ResponseEntity<ErrorBody> handleInvalidRefreshToken(
+            com.srm.creditengine.auth.domain.exception.InvalidRefreshTokenException ex) {
+        return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+            .body(new ErrorBody(ex.getMessage()));
+    }
+
+    @ExceptionHandler(HandlerMethodValidationException.class)
+    public ResponseEntity<ErrorBody> handleMethodValidation(HandlerMethodValidationException ex) {
+        String message = ex.getAllErrors().stream()
+            .map(MessageSourceResolvable::getDefaultMessage)
+            .filter(Objects::nonNull)
+            .collect(Collectors.joining("; "));
+        return ResponseEntity.badRequest().body(new ErrorBody(message));
+    }
+
     @ExceptionHandler(MethodArgumentNotValidException.class)
     public ResponseEntity<ErrorBody> handleValidation(MethodArgumentNotValidException ex) {
         String message = ex.getBindingResult().getFieldErrors().stream()
@@ -111,12 +137,27 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(NoResourceFoundException.class)
     public ResponseEntity<ErrorBody> handleNoResource(NoResourceFoundException ex) {
         return ResponseEntity.status(HttpStatus.NOT_FOUND)
-            .body(new ErrorBody(ex.getResourcePath()));
+            .body(new ErrorBody("Resource not found."));
+    }
+
+    @ExceptionHandler(org.springframework.security.access.AccessDeniedException.class)
+    public ResponseEntity<ErrorBody> handleAccessDenied(org.springframework.security.access.AccessDeniedException ex) {
+        return ResponseEntity.status(HttpStatus.FORBIDDEN)
+            .body(new ErrorBody("Access denied."));
+    }
+
+    @ExceptionHandler(org.springframework.security.core.AuthenticationException.class)
+    public ResponseEntity<ErrorBody> handleAuthentication(org.springframework.security.core.AuthenticationException ex) {
+        return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+            .body(new ErrorBody("Authentication required."));
     }
 
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ErrorBody> handleUnexpected(Exception ex, HttpServletRequest req) {
-        String requestId = UUID.randomUUID().toString();
+        String requestId = org.slf4j.MDC.get("requestId");
+        if (requestId == null) {
+            requestId = UUID.randomUUID().toString();
+        }
         log.error("requestId={} unhandled error on {}", requestId, req.getRequestURI(), ex);
         return ResponseEntity.internalServerError()
             .body(new ErrorBody("Unexpected internal error."));
