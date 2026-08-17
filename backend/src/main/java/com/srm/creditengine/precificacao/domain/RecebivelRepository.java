@@ -5,11 +5,13 @@ import java.util.Optional;
 
 public interface RecebivelRepository {
 
-    void save(Recebivel recebivel);
+    Recebivel save(Recebivel recebivel);
 
     boolean existsReferenciaExterna(String referenciaExterna);
 
     Optional<Recebivel> obtainById(Long id);
 
     List<Recebivel> list(RecebivelQueryCriteria criteria);
+
+    boolean marcarLiquidado(Long id, Long expectedVersion);
 }

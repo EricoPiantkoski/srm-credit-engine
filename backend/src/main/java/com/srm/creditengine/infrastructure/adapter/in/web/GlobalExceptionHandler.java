@@ -3,6 +3,9 @@ package com.srm.creditengine.infrastructure.adapter.in.web;
 import com.srm.creditengine.cambio.domain.exception.ExchangeRateConflictException;
 import com.srm.creditengine.cambio.domain.exception.ExchangeRateNotFoundException;
 import com.srm.creditengine.cambio.domain.exception.ExchangeRateProviderUnavailableException;
+import com.srm.creditengine.liquidacao.domain.exception.LiquidacaoConflictException;
+import com.srm.creditengine.liquidacao.domain.exception.LiquidacaoNotFoundException;
+import com.srm.creditengine.liquidacao.domain.exception.LiquidacaoVersionConflictException;
 import com.srm.creditengine.precificacao.domain.exception.ExchangeRateUnavailableException;
 import com.srm.creditengine.precificacao.domain.exception.ReceivableConflictException;
 import com.srm.creditengine.shared.domain.exception.DomainException;
@@ -39,6 +42,24 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(ReceivableConflictException.class)
     public ResponseEntity<ErrorBody> handleReceivableConflict(ReceivableConflictException ex) {
         return ResponseEntity.status(HttpStatus.CONFLICT)
+            .body(new ErrorBody(ex.getMessage()));
+    }
+
+    @ExceptionHandler(LiquidacaoConflictException.class)
+    public ResponseEntity<ErrorBody> handleLiquidacaoConflict(LiquidacaoConflictException ex) {
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+            .body(new ErrorBody(ex.getMessage()));
+    }
+
+    @ExceptionHandler(LiquidacaoVersionConflictException.class)
+    public ResponseEntity<ErrorBody> handleLiquidacaoVersionConflict(LiquidacaoVersionConflictException ex) {
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+            .body(new ErrorBody(ex.getMessage()));
+    }
+
+    @ExceptionHandler(LiquidacaoNotFoundException.class)
+    public ResponseEntity<ErrorBody> handleLiquidacaoNotFound(LiquidacaoNotFoundException ex) {
+        return ResponseEntity.status(HttpStatus.NOT_FOUND)
             .body(new ErrorBody(ex.getMessage()));
     }
 
