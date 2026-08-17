@@ -38,6 +38,8 @@ Para se aprofundar em cada um dos assuntos técnicos, ou visualizar contratos de
 
 - [**TechDoc**](docs/TechDoc.md) — documentação técnica completa: módulos (câmbio, precificação, liquidação), contratos de API, persistência, configuração e operação.
 - [**Decisões de Arquitetura**](docs/architecture_decision_records-precificacao_liquidacao.md) — por que precificação usa Strategy, como a precisão decimal é garantida e como o optimistic locking protege a liquidação.
+- [**Diagrama C4**](docs/c4_architecture.md) — arquitetura em camadas de contexto, containers e componentes (Mermaid).
+- [**Guia de Operação e Rollback**](docs/guia_operacao_rollback.md) — subida, monitoramento, alertas e estratégias de reversão (código e banco).
 - [**Topologia e Arquitetura**](docs/architecture_decision_records-architecture_definition.md) — a fundamentação por trás do monolito modular em repositório único.
 - [**Banco de Dados**](docs/architecture_decision_records-db_definition.md) — racional de escolha do PostgreSQL (CAP/PACELC, ACID, escala).
 - [**Modelo de Dados**](docs/database_model.md) — diagrama ER, DDL e convenções do schema.
