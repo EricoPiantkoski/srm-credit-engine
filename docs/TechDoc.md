@@ -8,7 +8,7 @@ Documentação técnica das decisões de arquitetura, módulos, contratos de API
 
 ### 1.1 Responsabilidade
 
-Armazenar e prover taxas de câmbio por par de moedas, com histórico por vigência, atualização manual ou integração externa (BCB PTAX) e conversão de valores com arredondamento controlado.
+Armazenar e prover taxas de câmbio por par de moedas, com histórico por vigência, atualização manual ou integração externa (BCB PTAX, AwesomeAPI) e conversão de valores com arredondamento controlado.
 
 ### 1.2 Estrutura (arquitetura hexagonal)
 
@@ -54,6 +54,7 @@ Base: `/api/taxas-cambio`. Erros em formato padronizado `{ "message": "..." }` v
 | Converter valor entre moedas | `POST /api/taxas-cambio/convert` | `200` | `400`, `404`, `422`, `503` |
 
 **Fallback para o provedor (decisão aprovada):** quando não há taxa vigente armazenada para o par, a leitura busca automaticamente no BCB PTAX:
+
 - `GET /vigente`: busca no provedor **sem persistir** (GET permanece *safe*/sem efeito colateral); se o provedor não tiver dados → `404`.
 - `POST /convert`: busca no provedor **e persiste de forma idempotente** (via `TaxaCambioOrchestrator` — só grava se a vigência ainda não existe); POST permite efeito colateral.
 - Falha da integração (BCB indisponível/erro) → `503` orientando a inserção manual via `PUT`.
@@ -81,6 +82,7 @@ Base: `/api/taxas-cambio`. Erros em formato padronizado `{ "message": "..." }` v
 - Timeout configurado no Feign; falha/indisponibilidade do provedor (`FeignException`) → `ExchangeRateProviderUnavailableException` → degradação graciosa com `503`.
 
 **Resiliência (retry + circuit breaker):** as duas chamadas externas (BCB PTAX e AwesomeAPI) são protegidas por:
+
 - **Retry com backoff no Feign** via `spring.cloud.openfeign.client.config.<name>.retryer` → `BackoffRetryer` (`feign.Retryer.Default` com período inicial 100ms, máximo 1s, 3 tentativas — backoff exponencial).
 - **ErrorDecoder customizado** (`RetryableServerErrorDecoder`): converte qualquer resposta 5xx em `RetryableException` para que o retry acima efetivamente atue (o `ErrorDecoder.Default` só retenta quando há header `Retry-After`).
 - **Circuit breaker** (resilience4j, starter `spring-cloud-starter-circuitbreaker-resilience4j`): `@CircuitBreaker(name = "bcbPtax" | "awesomeApiBrc", fallbackMethod = "obtainFallback")` nos providers; o fallback relança `ExchangeRateProviderUnavailableException` (→ `503` com `resolution` de inserção manual). Config em `resilience4j.circuitbreaker` (janela deslizante 10, mínimo 5 chamadas, limiar 50%, half-open 3).
@@ -148,7 +150,7 @@ Calcular o valor presente/antecipado de recebíveis (deságio por spread de tipo
 precificacao/
 ├── domain/
 │   ├── Recebivel                    entidade: referenciaExterna, codigoTipo, valorFace,
-│   │                                 codigoMoeda, dataVencimento, cedente, version
+│   │                                 codigoMoeda, dataVencimento, cedente, version, status
 │   ├── TipoRecebivel                enum/entidade de referência (DUPLICATA_MERCANTIL, CHEQUE_PRE_DATADO)
 │   ├── Spread                       VO: valor percentual positivo
 │   ├── TaxaCambioAplicada           VO: moeda pagamento, taxa, escala
@@ -181,8 +183,8 @@ precificacao/
 
 - Vencimento deve ser no futuro (validado por `validateDataVencimentoInFuture`).
 - `referenciaExterna` é único por cedente; duplicidade → `ReceivableConflictException` → `409`.
-- Fórmula: `valorPresente = valorFace / (1 + taxaBase + spread) ^ prazoMeses`; `prazoMeses = dias / 30` (escala 6, HALF_EVEN); expoente inteiro → `BigDecimal.pow`, fracionário → `Math.pow` (ver ADR-003).
-- `spread` por tipo: duplicata mercantil 1,5%, cheque pré-datado 2,5% (ver ADR-004).
+- Fórmula: `valorPresente = valorFace / (1 + taxaBase + spread) ^ prazoMeses`; `prazoMeses = dias / 30` (escala 6, HALF_EVEN); expoente inteiro → `BigDecimal.pow`, fracionário → `Math.pow` (ver decisões de precificação).
+- `spread` por tipo: duplicata mercantil 1,5%, cheque pré-datado 2,5% (ver decisões de precificação).
 - Conversão cambial aplicada apenas no final: `valorPresente * taxa` quando `codigoMoeda` ≠ `moedaPagamento`; ausência de taxa → `ExchangeRateUnavailableException`.
 - O simulador nunca persiste; usa a mesma fórmula do motor.
 
@@ -207,8 +209,8 @@ Base: `/api`. Erros em formato padronizado `{ "message": "..." }` via `GlobalExc
 
 ### 2.5 Persistência
 
-- Sem migração nova: tabelas `tipo_recebivel` e `recebivel` existem desde `V1__init_schema.sql`; seeds de tipos em `V2__seed_reference_data.sql`.
-- `RecebivelJpaEntity` mapeia `valor_face NUMERIC(19,4)`, `data_vencimento DATE`, `version` (locking otimista).
+- Sem migração nova: tabelas `tipo_recebivel` e `recebivel` existem desde `V1__init_schema.sql`; seeds de tipos em `V2__seed_reference_data.sql`; `status` do recebível em `V4__recebivel_status.sql`.
+- `RecebivelJpaEntity` mapeia `valor_face NUMERIC(19,4)`, `data_vencimento DATE`, `version` (locking otimista) e `status` (`DISPONIVEL`/`LIQUIDADO`).
 - Escala real da moeda obtida via `MoedaCatalog` (`moeda.codigo` → `escala`), não hardcoded.
 
 ### 2.6 Configuração (`application.yml`)
@@ -237,33 +239,33 @@ Liquidar um lote de recebíveis de forma atômica e idempotente: precifica cada 
 ### 2A.2 Estrutura (arquitetura hexagonal)
 
 - **Domínio**: `Liquidacao`, `ItemLiquidacao`, `StatusLiquidacao`, porta `RepositorioLiquidacao`; exceções `LiquidacaoConflictException` (idempotência), `LiquidacaoVersionConflictException` (concorrência), `LiquidacaoNotFoundException`, `RecebivelNotFoundException`.
-- **Aplicação**: `LiquidarLote` (`@Transactional`, idempotência por `chaveIdempotencia`, precificação via estratégia, bump de versão por recebível), `ConsultarLiquidacao`.
-- **Infraestrutura**: `LiquidacaoJpaEntity`/`LiquidacaoItemJpaEntity`, `LiquidacaoJpaRepository`, `LiquidacaoRepositoryAdapter` (também `tryBumpVersion` na porta `RecebivelRepository`), `LiquidacaoConfig`, `ExtratoController`/`LiquidacaoController`.
+- **Aplicação**: `LiquidarLote` (`@Transactional`, idempotência por `chaveIdempotencia` UUID, precificação via estratégia, baixa condicional por recebível), `ConsultarLiquidacao`.
+- **Infraestrutura**: `LiquidacaoJpaEntity`/`LiquidacaoItemJpaEntity`, `LiquidacaoJpaRepository`, `LiquidacaoRepositoryAdapter` (e `marcarLiquidado` na porta `RecebivelRepository`), `LiquidacaoConfig`, `ExtratoController`/`LiquidacaoController`.
 
 ### 2A.3 Regras de negócio
 
 - Cada item é precificado pelo `PrecificacaoEngine`; câmbio aplicado quando `moedaPagamento != moeda do ativo` (via `CambioGateway`).
-- **Concorrência**: lock otimista por recebível — `tryBumpVersion(id, expectedVersion)` incrementa `version` apenas se ainda igual; 0 linhas → `LiquidacaoVersionConflictException` → 409. Sem retry automático: o cliente reprocessa com dados atuais (precificação é stateless). Detalhes no ADR `architecture_decision_records-optimistic_locking_liquidacao.md`.
-- **Idempotência**: `chave_idempotencia` UNIQUE; chave duplicada → `LiquidacaoConflictException` → 409.
+- **Concorrência**: lock otimista por recebível — `marcarLiquidado(id, expectedVersion)` executa `UPDATE ... SET version = version + 1, status = 'LIQUIDADO' WHERE id = ? AND version = ? AND status = 'DISPONIVEL'`; 0 linhas (conflito **ou** recebível já liquidado) → `LiquidacaoVersionConflictException` → 409. Sem retry automático: o cliente reprocessa com dados atuais (precificação é stateless). Detalhes em `architecture_decision_records-precificacao_liquidacao.md`.
+- **Idempotência**: `chave_idempotencia` (UUID) UNIQUE; chave duplicada → `LiquidacaoConflictException` → 409.
 - `createdAt` controlado por aplicação (`Instant`).
 
 ### 2A.4 Contratos de API
 
-- `POST /api/liquidacoes` — liquida um lote (201/400/409/422).
+- `POST /api/liquidacoes` — liquida um lote (201/400/409/422). Corpo: `chaveIdempotencia` (UUID obrigatório), `codigoMoedaPagamento`, `recebiveisIds`.
 - `GET /api/liquidacoes/{id}` — consulta uma liquidação (200/404).
 - `GET /api/liquidacoes/extrato?dataInicial=&dataFinal=&status=&cedente=&lastId=&limit=` — extrato por item com paginação por cursor (200/400).
 - `GlobalExceptionHandler`: `LiquidacaoConflictException`/`LiquidacaoVersionConflictException` → 409, `LiquidacaoNotFoundException` → 404, `RecebivelNotFoundException` → 422.
 
 ### 2A.5 Persistência
 
-- Tabelas `liquidacao`/`liquidacao_item` (V1) mapeadas em JPA com `@EntityGraph` para carregar itens; `version` no cabeçalho.
-- Extrato via **SQL nativo** (`JdbcTemplate`) em `ConsultaLiquidacaoAdapter`: `li.id > :lastId ORDER BY li.id LIMIT :limit`, filtros por período/status/cedente, valores parametrizados.
+- Tabelas `liquidacao`/`liquidacao_item` (V1) mapeadas em JPA com `@EntityGraph` para carregar itens; `chave_idempotencia` UNIQUE.
+- Extrato via **SQL nativo** (`JdbcTemplate`) em `ConsultaLiquidacaoAdapter`: `li.id > :lastId ORDER BY li.id LIMIT :limit`, filtros por período/status/cedente, valores parametrizados; índices em `V3__extrato_indexes.sql`.
 
 ### 2A.6 Testes
 
 - Domínio/aplicação: `LiquidacaoTest`, `ItemLiquidacaoTest`, `LiquidarLoteTest`, `ConsultarLiquidacaoTest`.
 - Web (MockMvc): `LiquidacaoControllerTest`, `ExtratoControllerTest`.
-- Integração (Testcontainers): `LiquidacaoRepositoryAdapterTest` (inclui `tryBumpVersion`/conflito), `ConsultaLiquidacaoAdapterTest` (filtros + cursor).
+- Integração (Testcontainers): `LiquidacaoRepositoryAdapterTest` (inclui `marcarLiquidado`/conflito e dupla liquidação sequencial rejeitada), `ConsultaLiquidacaoAdapterTest` (filtros + cursor).
 - Contrato OpenAPI: `OpenApiContractTest`.
 
 ---
@@ -274,11 +276,11 @@ Liquidar um lote de recebíveis de forma atômica e idempotente: precifica cada 
 - `spring-cloud-starter-openfeign` para integrações HTTP externas; `spring-cloud-starter-circuitbreaker-resilience4j` + `spring-retry` para resiliência; `wiremock-standalone` (3.13.2) como dependência de teste.
 - `springdoc-openapi-starter-webmvc-ui` (2.8.17) com anotações `@Operation`/`@ApiResponse`/`@Tag` nos controllers (Swagger UI em `/swagger-ui.html`, spec em `/v3/api-docs`).
 - JaCoCo ≥ 90% de cobertura de linha (atual: ~98%).
-- Backend: 187 testes (unitários, web, integração, contrato), `./mvnw verify` BUILD SUCCESS.
+- Backend: 190 testes (unitários, web, integração, contrato), `./mvnw verify` BUILD SUCCESS.
 
 ## 4. Operação
 
-- Banco: PostgreSQL; migrações via Flyway (`spring.flyway.locations=classpath:db/migration`); `ddl-auto: validate`.
+- Banco: PostgreSQL; migrações via Flyway (`spring.flyway.locations=classpath:db/migration`); `ddl-auto: validate`. Migrações: `V1` schema, `V2` seed de referência, `V3` índices de extrato, `V4` status do recebível.
 - Porta configurável (`PORT`, default 8080); CORS por `CORS_ALLOWED_ORIGINS`.
 - Perfis: o `application.yml` **não contém defaults de desenvolvimento** — banco (`DB_URL`/`DB_USERNAME`/`DB_PASSWORD`) e CORS (`CORS_ALLOWED_ORIGINS`) são obrigatórios via env; o perfil `local` (`application-local.yml`) fornece os valores de desenvolvimento (Postgres `localhost:5656`, CORS `http://localhost:5173`). Testes de contexto usam `@ActiveProfiles("test")` + `application-test.yml` para o CORS, com datasource via Testcontainers (`@DynamicPropertySource`).
 - Secrets e credenciais apenas por variáveis de ambiente (`DB_*`, `BCB_PTAX_*`, `AWESOMEAPI_*`, `PRECIFICACAO_TAXA_BASE`).

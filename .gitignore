@@ -30,3 +30,6 @@ frontend/test-results/
 # Checklist de conclusão (documento de trabalho)
 docs/checklist-conclusao.md
 
+# Plano de implementação (documento de trabalho, não versionar)
+.docs/implementation_plan.md
+
