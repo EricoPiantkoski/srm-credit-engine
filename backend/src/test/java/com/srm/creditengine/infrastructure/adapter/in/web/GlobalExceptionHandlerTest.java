@@ -6,6 +6,8 @@ import com.srm.creditengine.cambio.domain.ParMoedas;
 import com.srm.creditengine.cambio.domain.exception.ExchangeRateConflictException;
 import com.srm.creditengine.cambio.domain.exception.ExchangeRateNotFoundException;
 import com.srm.creditengine.cambio.domain.exception.ExchangeRateProviderUnavailableException;
+import com.srm.creditengine.precificacao.domain.exception.ExchangeRateUnavailableException;
+import com.srm.creditengine.precificacao.domain.exception.ReceivableConflictException;
 import com.srm.creditengine.shared.domain.exception.IncompatibleCurrenciesException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.ConstraintViolation;
@@ -57,6 +59,15 @@ class GlobalExceptionHandlerTest {
     }
 
     @Test
+    void receivableConflictMapsToConflict() {
+        ResponseEntity<GlobalExceptionHandler.ErrorBody> response =
+            handler.handleReceivableConflict(new ReceivableConflictException("REF-001"));
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
+        assertThat(response.getBody().message()).contains("REF-001");
+    }
+
+    @Test
     void exchangeRateNotFoundMapsToNotFound() {
         ResponseEntity<GlobalExceptionHandler.ErrorBody> response =
             handler.handleExchangeRateNotFound(new ExchangeRateNotFoundException(PAR));
@@ -72,6 +83,30 @@ class GlobalExceptionHandlerTest {
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.SERVICE_UNAVAILABLE);
         assertThat(response.getBody().message()).contains("provider unavailable");
+        assertThat(response.getBody().resolution()).contains("PUT /api/taxas-cambio");
+    }
+
+    @Test
+    void exchangeRateUnavailableMapsToUnprocessableEntityWithResolution() {
+        ResponseEntity<GlobalExceptionHandler.ErrorBody> response =
+            handler.handleExchangeRateUnavailable(new ExchangeRateUnavailableException(
+                new com.srm.creditengine.shared.domain.model.CodigoMoeda("BRL"),
+                new com.srm.creditengine.shared.domain.model.CodigoMoeda("USD")));
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.UNPROCESSABLE_ENTITY);
+        assertThat(response.getBody().message()).contains("no exchange rate available");
+        assertThat(response.getBody().resolution()).contains("PUT /api/taxas-cambio");
+    }
+
+    @Test
+    void genericDomainExceptionHasNullResolution() {
+        var ex = new IncompatibleCurrenciesException(
+            new com.srm.creditengine.shared.domain.model.CodigoMoeda("BRL"),
+            new com.srm.creditengine.shared.domain.model.CodigoMoeda("USD"));
+
+        ResponseEntity<GlobalExceptionHandler.ErrorBody> response = handler.handleDomainException(ex);
+
+        assertThat(response.getBody().resolution()).isNull();
     }
 
     @Test

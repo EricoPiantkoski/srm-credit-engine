@@ -71,7 +71,7 @@ Base: `/api/taxas-cambio`. Erros em formato padronizado `{ "message": "..." }` v
 
 ### 1.5 Adapter externo — BCB PTAX (Feign Client)
 
-- `BcbPtaxClient` (`@FeignClient`, url de `app.cambio.provider.base-url`) chama a função OData `CotacaoMoedaPeriodo` do BCB com assinatura real `(moeda, dataInicial, dataFinalCotacao)` (validada no `$metadata`).
+- `BcbPtaxClient` (`@FeignClient`, url de `app.cambio.bcb-ptax.base-url`) chama a função OData `CotacaoMoedaPeriodo` do BCB com assinatura real `(moeda, dataInicial, dataFinalCotacao)` (validada no `$metadata`).
 - `BcbPtaxTaxaCambioProvider` traduz o par em consulta, usa a cotação de **Fechamento mais recente** (`cotacaoVenda`) e aplica a orientação do par:
   - `ParMoedas(USD, BRL)` → taxa = cotação de venda do USD em BRL;
   - `ParMoedas(BRL, USD)` → taxa = `1 / cotação`;
@@ -79,6 +79,11 @@ Base: `/api/taxas-cambio`. Erros em formato padronizado `{ "message": "..." }` v
 - `dataHoraCotacao` (com microssegundos, ex.: `2026-08-13 10:08:11.052389`) é normalizado para ISO e convertido para `Instant` no fuso `America/Sao_Paulo`.
 - Query params OData iniciados com `@` são enviados via `@RequestParam Map<String, String>` (o `SpringMvcContract` do Feign não expande nomes com `@` como template).
 - Timeout configurado no Feign; falha/indisponibilidade do provedor (`FeignException`) → `ExchangeRateProviderUnavailableException` → degradação graciosa com `503`.
+
+**Resiliência (retry + circuit breaker):** as duas chamadas externas (BCB PTAX e AwesomeAPI) são protegidas por:
+- **Retry com backoff no Feign** via `spring.cloud.openfeign.client.config.<name>.retryer` → `BackoffRetryer` (`feign.Retryer.Default` com período inicial 100ms, máximo 1s, 3 tentativas — backoff exponencial).
+- **ErrorDecoder customizado** (`RetryableServerErrorDecoder`): converte qualquer resposta 5xx em `RetryableException` para que o retry acima efetivamente atue (o `ErrorDecoder.Default` só retenta quando há header `Retry-After`).
+- **Circuit breaker** (resilience4j, starter `spring-cloud-starter-circuitbreaker-resilience4j`): `@CircuitBreaker(name = "bcbPtax" | "awesomeApiBrc", fallbackMethod = "obtainFallback")` nos providers; o fallback relança `ExchangeRateProviderUnavailableException` (→ `503` com `resolution` de inserção manual). Config em `resilience4j.circuitbreaker` (janela deslizante 10, mínimo 5 chamadas, limiar 50%, half-open 3).
 
 ### 1.6 Persistência
 
@@ -91,38 +96,149 @@ Base: `/api/taxas-cambio`. Erros em formato padronizado `{ "message": "..." }` v
 ```yaml
 app:
   cambio:
-    provider:
+    bcb-ptax:
       base-url: ${BCB_PTAX_BASE_URL:https://olinda.bcb.gov.br/olinda/servico/PTAX/versao/v1/odata}
       timeout-ms: ${BCB_PTAX_TIMEOUT_MS:5000}
       quote-currency: ${BCB_PTAX_QUOTE_CURRENCY:USD}
+    awesome-api:
+      base-url: ${AWESOME_API_BASE_URL:https://economia.awesomeapi.com.br}
+      timeout-ms: ${AWESOME_API_TIMEOUT_MS:5000}
 spring:
   cloud:
     openfeign:
       client:
         config:
-          default:
-            connect-timeout: ${app.cambio.provider.timeout-ms}
-            read-timeout: ${app.cambio.provider.timeout-ms}
+          bcbPtax:
+            connect-timeout: ${app.cambio.bcb-ptax.timeout-ms}
+            read-timeout: ${app.cambio.bcb-ptax.timeout-ms}
+          awesomeApiBrc:
+            connect-timeout: ${app.cambio.awesome-api.timeout-ms}
+            read-timeout: ${app.cambio.awesome-api.timeout-ms}
 ```
 
-### 1.8 Testes
+### 1.8 Segunda fonte de câmbio — AwesomeAPI (`(BRL, USD)`)
 
-- Unitários: `ParMoedasTest`, `TaxaCambioTest`, `TaxaCambioUpdaterTest`, `TaxaVigenteReaderTest`, `DinheiroConverterTest`, `TaxaCambioOrchestratorTest`, `BcbPtaxTaxaCambioProviderTest` (Mockito).
-- Contrato HTTP (WireMock): `BcbPtaxClientContractTest`.
+- `AwesomeApiBrcClient` (`@FeignClient`, url de `app.cambio.awesome-api.base-url`) chama `GET /json/last/BRL-USD`.
+- `AwesomeApiBrcProvider` usa o campo `ask` **diretamente** (sem `1 / taxa`), escala 8, para `ParMoedas(BRL, USD)`; par inverso `(USD, BRL)` não é suportado por esta fonte (`Optional.empty()`).
+- Vigência derivada de `create_date` (`yyyy-MM-dd HH:mm:ss`) interpretada no fuso `America/Sao_Paulo`; conversão de datas/horários em `America/Sao_Paulo`.
+- `TaxaCambioProviderRouter` (`@Primary`) roteia: `(BRL, USD)` → AwesomeAPI; demais pares → BCB PTAX.
+- Falha/indisponibilidade da AwesomeAPI (`FeignException`) → `ExchangeRateProviderUnavailableException` → `503` (retry com backoff + circuit breaker, ver seção 1.5).
+
+### 1.9 Testes
+
+- Unitários: `ParMoedasTest`, `TaxaCambioTest`, `TaxaCambioUpdaterTest`, `TaxaVigenteReaderTest`, `DinheiroConverterTest`, `TaxaCambioOrchestratorTest`, `BcbPtaxTaxaCambioProviderTest`, `AwesomeApiBrcProviderTest`, `TaxaCambioProviderRouterTest` (Mockito).
+- Contrato HTTP (WireMock): `BcbPtaxClientContractTest`, `AwesomeApiBrcClientContractTest`.
+- Resiliência (integração, WireMock + Testcontainers): `FeignRetryIntegrationTest` (503 → retry com backoff, 3 tentativas), `CircuitBreakerIntegrationTest` (abre após 2 falhas e fallback responde sem chamar o provedor).
+- OpenAPI: `OpenApiContractTest` (`/v3/api-docs` expõe `@Operation`/`@ApiResponse`/`@Tag`).
 - Controller (MockMvc): `TaxaCambioControllerTest`.
 - Persistência (Testcontainers PostgreSQL): `TaxaCambioRepositoryAdapterTest`.
 - Handler global: `GlobalExceptionHandlerTest` (409/404/503/400).
 
 ---
 
-## 2. Stack e dependências
+## 2. Módulo Precificação (`com.srm.creditengine.precificacao`)
+
+### 2.1 Responsabilidade
+
+Calcular o valor presente/antecipado de recebíveis (deságio por spread de tipo + taxa base), registrar e listar recebíveis, e simular a precificação sem persistir. Quando a moeda de pagamento difere da moeda do recebível, aplica a taxa de câmbio vigente via `CambioGateway`.
+
+### 2.2 Estrutura (arquitetura hexagonal)
+
+```
+precificacao/
+├── domain/
+│   ├── Recebivel                    entidade: referenciaExterna, codigoTipo, valorFace,
+│   │                                 codigoMoeda, dataVencimento, cedente, version
+│   ├── TipoRecebivel                enum/entidade de referência (DUPLICATA_MERCANTIL, CHEQUE_PRE_DATADO)
+│   ├── Spread                       VO: valor percentual positivo
+│   ├── TaxaCambioAplicada           VO: moeda pagamento, taxa, escala
+│   ├── ResultadoPrecificacao        VO: valorPresente, desagio, taxaCambioAplicada (opcional)
+│   ├── RecebivelQueryCriteria       VO: filtros (cedente, codigoMoeda, codigoTipo, page, size)
+│   ├── PrecificacaoStrategy         porta de domínio: spreadFor(Recebivel)
+│   ├── DuplicataMercantilStrategy   spread 1,5%
+│   ├── ChequePreDatadoStrategy      spread 2,5%
+│   ├── PrecificacaoStrategyResolver  resolve por codigoTipo
+│   ├── RecebivelRepository          porta de saída
+│   ├── TipoRecebivelRepository      porta de saída
+│   ├── MoedaCatalog                 porta de saída (escala da moeda)
+│   ├── CambioGateway                porta de saída (conversão via taxas vigentes)
+│   └── exception/                   UnknownReceivableType, UnknownCurrency,
+│                                     InvalidPricing, ExchangeRateUnavailable, ReceivableConflict
+├── application/
+│   ├── PrecificacaoEngine           motor: valorPresente = valorFace / (1 + taxaBase + spread)^prazoMeses
+│   ├── RecebivelCreator             cria recebível (valida vencimento futuro, unicidade de referenciaExterna)
+│   ├── RecebivelQuery               lista recebíveis com filtros
+│   └── PrecificacaoSimulator        simula sem persistir (referenciaExterna/cedente = "simulacao")
+└── infrastructure/
+    ├── adapter/in/web/              RecebivelController, SimulacaoController
+    ├── adapter/out/persistence/     RecebivelJpaEntity, TipoRecebivelJpaEntity,
+    │                                 JpaRepository, adapters, MoedaCatalogAdapter
+    ├── adapter/out/cambio/          CambioGatewayAdapter (usa TaxaCambioUpdater/TaxaVigenteReader)
+    └── config/PrecificacaoConfig
+```
+
+### 2.3 Regras de negócio
+
+- Vencimento deve ser no futuro (validado por `validateDataVencimentoInFuture`).
+- `referenciaExterna` é único por cedente; duplicidade → `ReceivableConflictException` → `409`.
+- Fórmula: `valorPresente = valorFace / (1 + taxaBase + spread) ^ prazoMeses`; `prazoMeses = dias / 30` (escala 6, HALF_EVEN); expoente inteiro → `BigDecimal.pow`, fracionário → `Math.pow` (ver ADR-003).
+- `spread` por tipo: duplicata mercantil 1,5%, cheque pré-datado 2,5% (ver ADR-004).
+- Conversão cambial aplicada apenas no final: `valorPresente * taxa` quando `codigoMoeda` ≠ `moedaPagamento`; ausência de taxa → `ExchangeRateUnavailableException`.
+- O simulador nunca persiste; usa a mesma fórmula do motor.
+
+### 2.4 Contratos de API
+
+Base: `/api`. Erros em formato padronizado `{ "message": "..." }` via `GlobalExceptionHandler`.
+
+| Operação | Método e endpoint | Sucesso | Erros |
+| --- | --- | --- | --- |
+| Criar recebível | `POST /api/recebiveis` | `201` | `400`, `409`, `422` |
+| Listar recebíveis | `GET /api/recebiveis?cedente=&codigoMoeda=&codigoTipo=&page=&size=` | `200` | `400` |
+| Simular precificação | `POST /api/simulacoes/precificacao` | `200` | `400`, `422`, `503` |
+
+**Mapeamento exceção → HTTP** (todos no `GlobalExceptionHandler`):
+
+| Exceção | HTTP |
+| --- | --- |
+| `UnknownReceivableTypeException`, `UnknownCurrencyException`, `InvalidPricingException` | `422 Unprocessable Entity` |
+| `ReceivableConflictException` | `409 Conflict` |
+| `ExchangeRateUnavailableException` | `503 Service Unavailable` |
+| `MethodArgumentNotValidException` / `ConstraintViolationException` | `400 Bad Request` |
+
+### 2.5 Persistência
+
+- Sem migração nova: tabelas `tipo_recebivel` e `recebivel` existem desde `V1__init_schema.sql`; seeds de tipos em `V2__seed_reference_data.sql`.
+- `RecebivelJpaEntity` mapeia `valor_face NUMERIC(19,4)`, `data_vencimento DATE`, `version` (locking otimista).
+- Escala real da moeda obtida via `MoedaCatalog` (`moeda.codigo` → `escala`), não hardcoded.
+
+### 2.6 Configuração (`application.yml`)
+
+```yaml
+app:
+  precificacao:
+    taxa-base: ${PRECIFICACAO_TAXA_BASE:0.0}
+```
+
+### 2.7 Testes
+
+- Unitários: `PrecificacaoEngineTest` (fórmula, validações), `DuplicataMercantilStrategyTest`, `ChequePreDatadoStrategyTest`, `PrecificacaoStrategyResolverTest`, `RecebivelTest`, `SpreadTest`, `RecebivelQueryCriteriaTest`, `RecebivelCreatorTest`, `RecebivelQueryTest`, `PrecificacaoSimulatorTest`.
+- Controller (MockMvc): `RecebivelControllerTest`, `SimulacaoControllerTest`.
+- Persistência (Testcontainers PostgreSQL): `RecebivelRepositoryAdapterTest`, `MoedaCatalogAdapterTest`.
+- Gateway: `CambioGatewayAdapterTest`.
+
+---
+
+## 3. Stack e dependências
 
 - Java 21, Spring Boot 3.5.16, Spring Cloud **2025.0.3** (Northfields, Boot 3.5.x) via BOM `spring-cloud-dependencies`.
-- `spring-cloud-starter-openfeign` para integrações HTTP externas; `wiremock-standalone` (3.13.2) como dependência de teste.
+- `spring-cloud-starter-openfeign` para integrações HTTP externas; `spring-cloud-starter-circuitbreaker-resilience4j` + `spring-retry` para resiliência; `wiremock-standalone` (3.13.2) como dependência de teste.
+- `springdoc-openapi-starter-webmvc-ui` (2.8.17) com anotações `@Operation`/`@ApiResponse`/`@Tag` nos controllers (Swagger UI em `/swagger-ui.html`, spec em `/v3/api-docs`).
 - JaCoCo ≥ 90% de cobertura de linha (atual: ~99%).
+- Backend: 152 testes (unitários, web, integração, contrato), `./mvnw verify` BUILD SUCCESS.
 
-## 3. Operação
+## 4. Operação
 
 - Banco: PostgreSQL; migrações via Flyway (`spring.flyway.locations=classpath:db/migration`); `ddl-auto: validate`.
 - Porta configurável (`PORT`, default 8080); CORS por `CORS_ALLOWED_ORIGINS`.
-- Secrets e credenciais apenas por variáveis de ambiente (`DB_*`, `BCB_PTAX_*`).
+- Perfis: o `application.yml` **não contém defaults de desenvolvimento** — banco (`DB_URL`/`DB_USERNAME`/`DB_PASSWORD`) e CORS (`CORS_ALLOWED_ORIGINS`) são obrigatórios via env; o perfil `local` (`application-local.yml`) fornece os valores de desenvolvimento (Postgres `localhost:5656`, CORS `http://localhost:5173`). Testes de contexto usam `@ActiveProfiles("test")` + `application-test.yml` para o CORS, com datasource via Testcontainers (`@DynamicPropertySource`).
+- Secrets e credenciais apenas por variáveis de ambiente (`DB_*`, `BCB_PTAX_*`, `AWESOMEAPI_*`, `PRECIFICACAO_TAXA_BASE`).

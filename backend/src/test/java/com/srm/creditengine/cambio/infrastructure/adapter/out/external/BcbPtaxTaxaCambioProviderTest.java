@@ -166,4 +166,16 @@ class BcbPtaxTaxaCambioProviderTest {
         assertThat(result).isPresent();
         assertThat(result.get().taxa()).isEqualByComparingTo("5.0000");
     }
+
+    @Test
+    void fallbackRethrowsProviderUnavailable() throws Exception {
+        ParMoedas par = new ParMoedas(new CodigoMoeda("USD"), new CodigoMoeda("BRL"));
+        java.lang.reflect.Method fallback =
+            BcbPtaxTaxaCambioProvider.class.getDeclaredMethod("obtainFallback", ParMoedas.class, Throwable.class);
+        fallback.setAccessible(true);
+
+        assertThatThrownBy(() ->
+            fallback.invoke(provider, par, new RuntimeException("boom")))
+            .hasRootCauseInstanceOf(ExchangeRateProviderUnavailableException.class);
+    }
 }
