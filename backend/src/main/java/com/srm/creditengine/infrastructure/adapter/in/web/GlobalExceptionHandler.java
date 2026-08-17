@@ -3,7 +3,10 @@ package com.srm.creditengine.infrastructure.adapter.in.web;
 import com.srm.creditengine.cambio.domain.exception.ExchangeRateConflictException;
 import com.srm.creditengine.cambio.domain.exception.ExchangeRateNotFoundException;
 import com.srm.creditengine.cambio.domain.exception.ExchangeRateProviderUnavailableException;
+import com.srm.creditengine.precificacao.domain.exception.ExchangeRateUnavailableException;
+import com.srm.creditengine.precificacao.domain.exception.ReceivableConflictException;
 import com.srm.creditengine.shared.domain.exception.DomainException;
+import com.fasterxml.jackson.annotation.JsonInclude;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.ConstraintViolationException;
 import org.slf4j.Logger;
@@ -25,8 +28,16 @@ public class GlobalExceptionHandler {
 
     private static final Logger log = LoggerFactory.getLogger(GlobalExceptionHandler.class);
 
+    private static final String MANUAL_RATE_RESOLUTION = "insert the rate manually via PUT /api/taxas-cambio";
+
     @ExceptionHandler(ExchangeRateConflictException.class)
     public ResponseEntity<ErrorBody> handleExchangeRateConflict(ExchangeRateConflictException ex) {
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+            .body(new ErrorBody(ex.getMessage()));
+    }
+
+    @ExceptionHandler(ReceivableConflictException.class)
+    public ResponseEntity<ErrorBody> handleReceivableConflict(ReceivableConflictException ex) {
         return ResponseEntity.status(HttpStatus.CONFLICT)
             .body(new ErrorBody(ex.getMessage()));
     }
@@ -40,7 +51,13 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(ExchangeRateProviderUnavailableException.class)
     public ResponseEntity<ErrorBody> handleExchangeRateProviderUnavailable(ExchangeRateProviderUnavailableException ex) {
         return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
-            .body(new ErrorBody(ex.getMessage()));
+            .body(new ErrorBody(ex.getMessage(), MANUAL_RATE_RESOLUTION));
+    }
+
+    @ExceptionHandler(ExchangeRateUnavailableException.class)
+    public ResponseEntity<ErrorBody> handleExchangeRateUnavailable(ExchangeRateUnavailableException ex) {
+        return ResponseEntity.unprocessableEntity()
+            .body(new ErrorBody(ex.getMessage(), MANUAL_RATE_RESOLUTION));
     }
 
     @ExceptionHandler(ConstraintViolationException.class)
@@ -84,6 +101,10 @@ public class GlobalExceptionHandler {
             .body(new ErrorBody("Unexpected internal error."));
     }
 
-    public record ErrorBody(String message) {
+    @JsonInclude(JsonInclude.Include.NON_NULL)
+    public record ErrorBody(String message, String resolution) {
+        ErrorBody(String message) {
+            this(message, null);
+        }
     }
 }
