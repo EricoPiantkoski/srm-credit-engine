@@ -24,11 +24,15 @@ import java.time.Instant;
 import java.util.Optional;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
+import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
+@WithMockUser(roles = "ADMIN")
 @WebMvcTest(TaxaCambioController.class)
+@AutoConfigureMockMvc(addFilters = false)
 class TaxaCambioControllerTest {
 
     private static final ParMoedas USD_BRL = new ParMoedas(new CodigoMoeda("USD"), new CodigoMoeda("BRL"));

@@ -9,6 +9,7 @@ import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.OneToMany;
 import jakarta.persistence.Table;
+import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
@@ -46,23 +47,9 @@ public class LiquidacaoJpaEntity {
         itens.add(item);
     }
 
-    public Long getId() {
-        return id;
-    }
-
-    public String getChaveIdempotencia() {
-        return chaveIdempotencia;
-    }
-
-    public String getStatus() {
-        return status;
-    }
-
-    public Instant getCreatedAt() {
-        return createdAt;
-    }
-
-    public List<LiquidacaoItemJpaEntity> getItens() {
-        return itens;
-    }
+    public Long getId() { return id; }
+    public String getChaveIdempotencia() { return chaveIdempotencia; }
+    public String getStatus() { return status; }
+    public Instant getCreatedAt() { return createdAt; }
+    public List<LiquidacaoItemJpaEntity> getItens() { return itens; }
 }

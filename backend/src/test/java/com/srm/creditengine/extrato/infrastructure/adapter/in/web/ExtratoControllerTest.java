@@ -7,17 +7,22 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.srm.creditengine.extrato.application.ExtratoLiquidacoes;
+import com.srm.creditengine.extrato.domain.ExtratoFiltros;
 import com.srm.creditengine.extrato.domain.ExtratoLiquidacao;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
+import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
+@WithMockUser(roles = "ADMIN")
 @WebMvcTest(ExtratoController.class)
+@AutoConfigureMockMvc(addFilters = false)
 class ExtratoControllerTest {
 
     private static final ExtratoLiquidacao EXTRATO = new ExtratoLiquidacao(
@@ -67,5 +72,14 @@ class ExtratoControllerTest {
 
         mockMvc.perform(get("/api/liquidacoes/extrato"))
             .andExpect(status().isOk());
+    }
+
+    @Test
+    void extratoRejectsLimitAboveMax() throws Exception {
+        mockMvc.perform(get("/api/liquidacoes/extrato")
+                .param("dataInicial", "2026-08-01")
+                .param("dataFinal", "2026-08-31")
+                .param("limit", String.valueOf(ExtratoFiltros.MAX_LIMIT + 1)))
+            .andExpect(status().isBadRequest());
     }
 }

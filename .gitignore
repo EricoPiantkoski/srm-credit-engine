@@ -17,6 +17,7 @@ node_modules/
 dist/
 build/
 target/
+backups/
 
 # Env
 .env
@@ -30,3 +31,5 @@ frontend/test-results/
 # Checklist de conclusão (documento de trabalho)
 docs/checklist-conclusao.md
 
+# Plano de implementação (documento de trabalho, não versionar)
+.docs/implementation_plan.md
