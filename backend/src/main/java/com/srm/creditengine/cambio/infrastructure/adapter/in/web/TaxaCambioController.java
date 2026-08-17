@@ -9,6 +9,9 @@ import com.srm.creditengine.cambio.domain.TaxaCambio;
 import com.srm.creditengine.cambio.domain.exception.ExchangeRateNotFoundException;
 import com.srm.creditengine.shared.domain.model.CodigoMoeda;
 import com.srm.creditengine.shared.domain.model.Dinheiro;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
@@ -28,6 +31,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 @Validated
 @RestController
+@Tag(name = "Taxas de Câmbio", description = "Gestão de taxas de câmbio e conversão")
 @RequestMapping("/api/taxas-cambio")
 public class TaxaCambioController {
 
@@ -45,6 +49,10 @@ public class TaxaCambioController {
     }
 
     @PutMapping
+    @Operation(summary = "Atualiza a taxa de câmbio vigente de um par de moedas",
+        description = "Grava manualmente a taxa de câmbio e sua vigência para um par de moedas.")
+    @ApiResponse(responseCode = "200", description = "Taxa de câmbio atualizada")
+    @ApiResponse(responseCode = "409", description = "Já existe taxa vigente para o par informado")
     public ResponseEntity<TaxaCambioResponse> update(@Valid @RequestBody TaxaCambioUpdateRequest request) {
         ParMoedas par = new ParMoedas(new CodigoMoeda(request.codigoBase()), new CodigoMoeda(request.codigoCotacao()));
         TaxaCambio taxa = taxaCambioUpdater.update(par, request.taxa(), request.vigencia());
@@ -52,6 +60,11 @@ public class TaxaCambioController {
     }
 
     @GetMapping("/vigente")
+    @Operation(summary = "Consulta a taxa de câmbio vigente",
+        description = "Retorna a taxa vigente do par; se não existir no banco, busca na integração externa sem persistir.")
+    @ApiResponse(responseCode = "200", description = "Taxa de câmbio encontrada")
+    @ApiResponse(responseCode = "404", description = "Nenhuma taxa disponível para o par")
+    @ApiResponse(responseCode = "503", description = "Provedor externo indisponível")
     public ResponseEntity<TaxaCambioResponse> current(
             @RequestParam @Pattern(regexp = "[A-Z]{3}") String codigoBase,
             @RequestParam @Pattern(regexp = "[A-Z]{3}") String codigoCotacao) {
@@ -62,6 +75,10 @@ public class TaxaCambioController {
     }
 
     @PostMapping("/integracao")
+    @Operation(summary = "Busca e persiste a taxa de câmbio via integração externa",
+        description = "Consulta o provedor (BCB PTAX ou AwesomeAPI) e persiste a taxa vigente para o par.")
+    @ApiResponse(responseCode = "200", description = "Taxa de câmbio obtida e persistida")
+    @ApiResponse(responseCode = "503", description = "Provedor externo indisponível")
     public ResponseEntity<TaxaCambioResponse> orchestrate(
             @RequestParam @Pattern(regexp = "[A-Z]{3}") String codigoBase,
             @RequestParam @Pattern(regexp = "[A-Z]{3}") String codigoCotacao) {
@@ -71,6 +88,10 @@ public class TaxaCambioController {
     }
 
     @PostMapping("/convert")
+    @Operation(summary = "Converte um valor entre moedas",
+        description = "Converte um valor monetário usando a taxa vigente do par, buscando na integração se necessário.")
+    @ApiResponse(responseCode = "200", description = "Valor convertido")
+    @ApiResponse(responseCode = "503", description = "Provedor externo indisponível")
     public ResponseEntity<DinheiroConverterResponse> convert(@Valid @RequestBody DinheiroConverterRequest request) {
         Dinheiro valor = new Dinheiro(request.valor(), new CodigoMoeda(request.codigoMoeda()), request.escala());
         ParMoedas par = new ParMoedas(new CodigoMoeda(request.codigoBase()), new CodigoMoeda(request.codigoCotacao()));
