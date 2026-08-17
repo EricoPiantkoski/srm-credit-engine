@@ -274,13 +274,59 @@ Liquidar um lote de recebíveis de forma atômica e idempotente: precifica cada 
 
 - Java 21, Spring Boot 3.5.16, Spring Cloud **2025.0.3** (Northfields, Boot 3.5.x) via BOM `spring-cloud-dependencies`.
 - `spring-cloud-starter-openfeign` para integrações HTTP externas; `spring-cloud-starter-circuitbreaker-resilience4j` + `spring-retry` para resiliência; `wiremock-standalone` (3.13.2) como dependência de teste.
-- `springdoc-openapi-starter-webmvc-ui` (2.8.17) com anotações `@Operation`/`@ApiResponse`/`@Tag` nos controllers (Swagger UI em `/swagger-ui.html`, spec em `/v3/api-docs`).
-- JaCoCo ≥ 90% de cobertura de linha (atual: ~98%).
-- Backend: 190 testes (unitários, web, integração, contrato), `./mvnw verify` BUILD SUCCESS.
+- `springdoc-openapi-starter-webmvc-ui` (2.8.17) com anotações `@Operation`/`@ApiResponse`/`@Tag` nos controllers (Swagger UI em `/swagger-ui.html`, spec em `/v3/api-docs`); protegido por `ADMIN` exceto quando `SECURITY_EXPOSE_DOCS=true`.
+- `spring-boot-starter-security` + `spring-boot-starter-oauth2-resource-server` (JWT próprio HS256), `bucket4j-core` (rate limiting).
+- JaCoCo ≥ 90% de cobertura de linha (atual: ~96%).
+- Backend: 265 testes (unitários, web, integração, contrato), `./mvnw verify` BUILD SUCCESS.
 
 ## 4. Operação
 
-- Banco: PostgreSQL; migrações via Flyway (`spring.flyway.locations=classpath:db/migration`); `ddl-auto: validate`. Migrações: `V1` schema, `V2` seed de referência, `V3` índices de extrato, `V4` status do recebível.
+- Banco: PostgreSQL; migrações via Flyway (`spring.flyway.locations=classpath:db/migration`); `ddl-auto: validate`. Migrações: `V1` schema, `V2` seed de referência, `V3` índices de extrato, `V4` status do recebível, `V5` autenticação (`usuario`, `refresh_token`, seed `ADMIN`), `V6` auditoria (`audit_log`).
 - Porta configurável (`PORT`, default 8080); CORS por `CORS_ALLOWED_ORIGINS`.
-- Perfis: o `application.yml` **não contém defaults de desenvolvimento** — banco (`DB_URL`/`DB_USERNAME`/`DB_PASSWORD`) e CORS (`CORS_ALLOWED_ORIGINS`) são obrigatórios via env; o perfil `local` (`application-local.yml`) fornece os valores de desenvolvimento (Postgres `localhost:5656`, CORS `http://localhost:5173`). Testes de contexto usam `@ActiveProfiles("test")` + `application-test.yml` para o CORS, com datasource via Testcontainers (`@DynamicPropertySource`).
-- Secrets e credenciais apenas por variáveis de ambiente (`DB_*`, `BCB_PTAX_*`, `AWESOMEAPI_*`, `PRECIFICACAO_TAXA_BASE`).
+- Perfis: o `application.yml` **não contém defaults de desenvolvimento** — banco (`DB_URL`/`DB_USERNAME`/`DB_PASSWORD`), CORS (`CORS_ALLOWED_ORIGINS`) e `JWT_SECRET` são obrigatórios via env; o perfil `local` (`application-local.yml`) fornece os valores de desenvolvimento (Postgres `localhost:5656`, CORS `http://localhost:5173`). Testes de contexto usam `@ActiveProfiles("test")` + `application-test.yml` para o CORS, com datasource via Testcontainers (`@DynamicPropertySource`).
+- Secrets e credenciais apenas por variáveis de ambiente (`DB_*`, `BCB_PTAX_*`, `AWESOMEAPI_*`, `PRECIFICACAO_TAXA_BASE`, `JWT_SECRET`, `RATE_LIMIT_*`, `SECURITY_*`).
+
+## 5. Segurança e Auditoria
+
+### 5.1 Autenticação (JWT próprio + refresh)
+
+- `POST /api/auth/login` valida credenciais (`BCrypt`) e emite `accessToken` (TTL 15min) + `refreshToken` (TTL 7d, rotativo). O seed `V5` cria o usuário `admin` (senha `admin123`, com `deve_trocar_senha = true`).
+- `POST /api/auth/refresh` rotaciona o refresh token (hash SHA-256 armazenado em `refresh_token`; token antigo é revogado).
+- `POST /api/auth/logout` revoga o refresh token (exige `ADMIN`).
+- JWT assinado HS256 com segredo `JWT_SECRET` (env obrigatório); claims `iss`/`sub`/`uid`/`roles`. Exceções de domínio: `InvalidCredentialsException`/`InvalidRefreshTokenException` → 401.
+
+### 5.2 Autorização
+
+- Role única `ADMIN`; `SecurityFilterChain` stateless, CSRF desabilitado, `anyRequest().hasRole("ADMIN")`. Públicos: `/api/health`, `/api/auth/login`, `/api/auth/refresh`. Swagger/Actuator exigem `ADMIN` (ou são liberados via `SECURITY_EXPOSE_DOCS=true` nos perfis dev/teste).
+
+### 5.3 Endurecimento (Fase 1)
+
+- Rate limiting Bucket4j (`RATE_LIMIT_CAPACITY`/`RATE_LIMIT_REFILL`) nos métodos de escrita de `/api/**` (exceto `refresh`/`logout`) → 429 + `Retry-After`.
+- Teto `MAX_LIMIT=500` no extrato (`ExtratoFiltros` + `@Max` + `@Validated`).
+- Limites Tomcat: body 1MB, header 8KB.
+- CORS restrito (origens por `CORS_ALLOWED_ORIGINS`; métodos GET/POST/PUT/DELETE/OPTIONS; headers Content-Type/Authorization).
+- Security headers via Spring Security (CSP configurável por `SECURITY_CONTENT_SECURITY_POLICY`; `X-Frame-Options: DENY`; demais defaults).
+- `NoResourceFoundException` devolve mensagem genérica (sem vazar path).
+
+### 5.4 Auditoria (`audit_log`)
+
+- Escritas sensíveis (recebível, taxa, liquidação, auth) registram `username`, `acao`, `recurso`, `resultado` (SUCESSO/FALHA), `chaveIdempotencia`, `request_id` e `created_at` via `AuditFilter`.
+- Log estruturado por `RequestIdFilter` com `requestId`, método, path, status, duração e `userId` (MDC).
+
+### 5.5 Frontend
+
+- Login em `/login`; rota protegida redireciona para login; `http.ts` injeta `Authorization: Bearer`, faz refresh/retry single-flight em 401 e limpa a sessão em falha; tela de acesso negado em `/access-denied`; sessão persistida em `localStorage`.
+
+### 5.6 Observabilidade
+
+- O Actuator expõe `health`, `info`, `metrics` e `prometheus`; `management.endpoint.prometheus.enabled=true` garante a disponibilidade do endpoint.
+- `GET /actuator/prometheus` exige um JWT com role `ADMIN`. Acesso anônimo retorna `401`; um administrador recebe o texto no formato Prometheus, incluindo métricas JVM e HTTP.
+- O frontend inicializa o Sentry somente quando `VITE_SENTRY_DSN` está definido. `VITE_SENTRY_ENVIRONMENT` identifica o ambiente, o Error Boundary captura falhas de renderização e o cliente HTTP reporta falhas de API relevantes sem enviar tokens ou payloads.
+- O upload de sourcemaps é opcional e ocorre no build somente quando `SENTRY_AUTH_TOKEN`, `SENTRY_ORG` e `SENTRY_PROJECT` estão definidos. Esses valores nunca devem ser expostos em variáveis `VITE_*`.
+- Variáveis do frontend: `VITE_SENTRY_DSN`, `VITE_SENTRY_ENVIRONMENT`, `SENTRY_AUTH_TOKEN`, `SENTRY_ORG` e `SENTRY_PROJECT`.
+
+## 6. Teste manual e qualidade do frontend
+
+- O fluxo manual completo de autenticação, câmbio, recebíveis, simulação, liquidação, extrato, auditoria, segurança, Actuator e OpenAPI está em [`guia_teste_manual.md`](guia_teste_manual.md).
+- O frontend usa `pnpm test:coverage`, com provider V8 e gate mínimo de 80% de linhas, 70% de funções, 65% de branches e 80% de statements.
+- O relatório exclui bootstrap, arquivos de teste, tipos, service worker e configurações de ferramentas; o código de features, páginas, componentes e adapters permanece sujeito ao gate.

@@ -38,6 +38,8 @@ Para se aprofundar em cada um dos assuntos técnicos, ou visualizar contratos de
 
 - [**TechDoc**](docs/TechDoc.md) — documentação técnica completa: módulos (câmbio, precificação, liquidação), contratos de API, persistência, configuração e operação.
 - [**Decisões de Arquitetura**](docs/architecture_decision_records-precificacao_liquidacao.md) — por que precificação usa Strategy, como a precisão decimal é garantida e como o optimistic locking protege a liquidação.
+- [**Diagrama C4**](docs/c4_architecture.md) — arquitetura em camadas de contexto, containers e componentes (Mermaid).
+- [**Guia de Operação e Rollback**](docs/guia_operacao_rollback.md) — subida, monitoramento, alertas e estratégias de reversão (código e banco).
 - [**Topologia e Arquitetura**](docs/architecture_decision_records-architecture_definition.md) — a fundamentação por trás do monolito modular em repositório único.
 - [**Banco de Dados**](docs/architecture_decision_records-db_definition.md) — racional de escolha do PostgreSQL (CAP/PACELC, ACID, escala).
 - [**Modelo de Dados**](docs/database_model.md) — diagrama ER, DDL e convenções do schema.
@@ -144,8 +146,57 @@ cd backend && ./mvnw spring-boot:run -Dspring-boot.run.profiles=local
 Frontend (dev server):
 
 ```bash
-cd frontend && pnpm install && pnpm dev
+cd frontend && pnpm install --frozen-lockfile && pnpm dev
 ```
+
+O frontend requer Node.js `>=20`; a versão recomendada é Node 22, fixada em
+`frontend/.nvmrc`. Os gates locais são:
+
+```bash
+cd frontend
+pnpm typecheck && pnpm lint && pnpm test && pnpm build
+pnpm test:coverage && pnpm test:e2e
+```
+
+O Sentry frontend permanece inativo sem `VITE_SENTRY_DSN`. Quando configurado,
+use também `VITE_SENTRY_ENVIRONMENT`; o upload de sourcemaps exige
+`SENTRY_AUTH_TOKEN`, `SENTRY_ORG` e `SENTRY_PROJECT`.
+
+### Execução com Docker (produção/staging)
+
+Imagens multi-stage: `backend/Dockerfile` (Maven → JRE 21, healthcheck em
+`/api/health`) e `frontend/Dockerfile` (Node 22 + pnpm → nginx com proxy de
+`/api` para o backend via `BACKEND_URL`).
+
+```bash
+docker compose -f docker-compose.prod.yml up -d --build
+```
+
+Crie um `.env` na raiz (já ignorado pelo Git) com as variáveis obrigatórias:
+
+```dotenv
+POSTGRES_DB=srm_asset
+POSTGRES_USER=srm
+POSTGRES_PASSWORD=segredo-do-banco
+JWT_SECRET=segredo-base64-com-no-minimo-32-bytes
+```
+
+### Hooks de pre-commit
+
+Com Node 22 ativo, `cd frontend && pnpm install` ativa o husky automaticamente
+(script `prepare`). O hook `pre-commit` roda `lint-staged` (ESLint) sobre os
+arquivos staged e bloqueia o commit em caso de erro.
+
+### Deploy contínuo em staging
+
+O workflow `.github/workflows/deploy-staging.yml` (push em `main` ou
+`workflow_dispatch`) builda e publica as imagens backend/frontend no GHCR com
+as tags `latest` e `sha-<commit>`. Com a variável de repositório
+`DEPLOY_STAGING=true` e os secrets `STAGING_HOST`, `STAGING_SSH_USER` e
+`STAGING_SSH_KEY` configurados, o job `deploy` executa no host
+`docker compose -f docker-compose.prod.yml pull && docker compose -f docker-compose.prod.yml up -d`
+(repositório clonado em `/opt/srm_asset`, com o mesmo `.env` e
+`BACKEND_IMAGE`/`FRONTEND_IMAGE` apontando para o GHCR).
 
 ## Gestão de Crise e Rollback
 

@@ -139,5 +139,9 @@ class ConsultaLiquidacaoAdapterTest {
             LocalDate.of(2026, 8, 1), LocalDate.of(2026, 8, 31), null, null, null, null, 0))
             .isInstanceOf(IllegalArgumentException.class)
             .hasMessageContaining("limit");
+        assertThatThrownBy(() -> new ExtratoFiltros(
+            LocalDate.of(2026, 8, 1), LocalDate.of(2026, 8, 31), null, null, null, null, ExtratoFiltros.MAX_LIMIT + 1))
+            .isInstanceOf(IllegalArgumentException.class)
+            .hasMessageContaining("must not exceed");
     }
 }
