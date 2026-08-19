@@ -30,4 +30,3 @@ FLUXO DE EXECUÇÃO OBRIGATÓRIO (SIGA A ORDEM):
   2. Defina os contratos JSON (Request/Response) da API e a estrutura dos endpoints.
   3. **PARE O PROCESSAMENTO E SOLICITE APROVAÇÃO DO USUÁRIO**.
   4. Somente após a aprovação explícita, processe o contexto do frontend e siga com a implementação da interface.
-- Se a tarefa exigir alteração de um currículo: LEIA: .specs/resume_blueprint
