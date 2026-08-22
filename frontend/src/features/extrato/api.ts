@@ -13,7 +13,7 @@ export interface ExtratoLiquidacao {
   prazoMeses: number
   valorPagamento: number
   codigoMoedaPagamento: string
-  taxaAplicada: number
+  taxaAplicada: number | null
 }
 
 export interface ExtratoFiltros {

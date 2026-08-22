@@ -10,6 +10,7 @@ import com.srm.creditengine.auth.domain.UsuarioRepository;
 import com.srm.creditengine.auth.infrastructure.security.BcryptPasswordHasher;
 import com.srm.creditengine.auth.infrastructure.security.JwtTokenProvider;
 import com.srm.creditengine.audit.domain.AuditLogRepository;
+import com.srm.creditengine.infrastructure.security.AuthRateLimitFilter;
 import com.srm.creditengine.infrastructure.security.AuditFilter;
 import com.srm.creditengine.infrastructure.security.RateLimitFilter;
 import com.srm.creditengine.infrastructure.security.RequestIdFilter;
@@ -72,6 +73,13 @@ public class SecurityConfig {
         return new Logout(refreshTokenRepository, tokenProvider);
     }
 
+@Bean
+    public AuthRateLimitFilter authRateLimitFilter(
+            @Value("${app.security.auth-rate-limit.capacity:5}") int capacity,
+            @Value("${app.security.auth-rate-limit.refill-period:PT1M}") Duration refillPeriod) {
+        return new AuthRateLimitFilter(capacity, refillPeriod);
+    }
+
     @Bean
     public RateLimitFilter rateLimitFilter(
             @Value("${app.security.rate-limit.capacity:100}") int capacity,
@@ -98,6 +106,13 @@ public class SecurityConfig {
     }
 
     @Bean
+    public FilterRegistrationBean<AuthRateLimitFilter> authRateLimitFilterRegistration(AuthRateLimitFilter filter) {
+        FilterRegistrationBean<AuthRateLimitFilter> registration = new FilterRegistrationBean<>(filter);
+        registration.setEnabled(false);
+        return registration;
+    }
+
+    @Bean
     public FilterRegistrationBean<RequestIdFilter> requestIdFilterRegistration(RequestIdFilter filter) {
         FilterRegistrationBean<RequestIdFilter> registration = new FilterRegistrationBean<>(filter);
         registration.setEnabled(false);
@@ -111,10 +126,11 @@ public class SecurityConfig {
         return registration;
     }
 
-    @Bean
+@Bean
     @ConditionalOnWebApplication(type = ConditionalOnWebApplication.Type.SERVLET)
     public SecurityFilterChain securityFilterChain(HttpSecurity http,
                                                    RateLimitFilter rateLimitFilter,
+                                                   AuthRateLimitFilter authRateLimitFilter,
                                                    RequestIdFilter requestIdFilter,
                                                    AuditFilter auditFilter,
                                                    @Value("${app.security.expose-docs:false}") boolean exposeDocs,
@@ -129,12 +145,13 @@ public class SecurityConfig {
                 .frameOptions(frame -> frame.deny()))
             .authorizeHttpRequests(auth -> {
                 auth.requestMatchers(HttpMethod.OPTIONS, "/**").permitAll();
-                auth.requestMatchers("/api/health", "/api/auth/login", "/api/auth/refresh").permitAll();
+                auth.requestMatchers("/api/health", "/api/health/readiness", "/api/auth/login", "/api/auth/refresh").permitAll();
                 if (exposeDocs) {
                     auth.requestMatchers("/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html").permitAll();
                 }
                 auth.anyRequest().hasRole("ADMIN");
             })
+            .addFilterBefore(authRateLimitFilter, org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter.class)
             .addFilterBefore(rateLimitFilter, org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter.class)
             .addFilterAfter(requestIdFilter, org.springframework.security.web.access.intercept.AuthorizationFilter.class)
             .addFilterAfter(auditFilter, org.springframework.security.web.access.intercept.AuthorizationFilter.class)

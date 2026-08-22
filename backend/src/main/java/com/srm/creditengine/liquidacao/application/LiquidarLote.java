@@ -76,15 +76,15 @@ public class LiquidarLote {
     }
 
     public record LiquidarLoteInput(String chaveIdempotencia, String codigoMoedaPagamento, List<Long> recebiveisIds) {
-        private static final String UUID_REGEX =
-            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$";
+        private static final String UUID_V4_REGEX =
+            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$";
 
         public LiquidarLoteInput {
             Objects.requireNonNull(chaveIdempotencia, "chaveIdempotencia must not be null");
             Objects.requireNonNull(codigoMoedaPagamento, "codigoMoedaPagamento must not be null");
             Objects.requireNonNull(recebiveisIds, "recebiveisIds must not be null");
-            if (!chaveIdempotencia.matches(UUID_REGEX)) {
-                throw new IllegalArgumentException("chaveIdempotencia must be a UUID, but was: " + chaveIdempotencia);
+            if (!chaveIdempotencia.matches(UUID_V4_REGEX)) {
+                throw new IllegalArgumentException("chaveIdempotencia must be UUID v4, but was: " + chaveIdempotencia);
             }
             if (recebiveisIds.isEmpty()) {
                 throw new IllegalArgumentException("recebiveisIds must not be empty");

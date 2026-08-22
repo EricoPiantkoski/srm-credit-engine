@@ -8,6 +8,7 @@ import com.srm.creditengine.auth.domain.TokenPair;
 import com.srm.creditengine.auth.domain.TokenProvider;
 import com.srm.creditengine.auth.domain.Usuario;
 import com.srm.creditengine.auth.domain.UsuarioRepository;
+import com.srm.creditengine.auth.domain.exception.AccountLockedException;
 import com.srm.creditengine.auth.domain.exception.InvalidCredentialsException;
 import java.time.Instant;
 
@@ -28,14 +29,26 @@ public class Login {
 
     public TokenPair login(String username, String rawPassword, Instant now) {
         Usuario usuario = usuarioRepository.findByUsername(username)
-            .filter(u -> passwordHasher.matches(rawPassword, u.passwordHash()))
             .orElseThrow(InvalidCredentialsException::new);
 
-        AccessToken accessToken = tokenProvider.issueAccessToken(usuario);
+        if (usuario.isLocked(now)) {
+            throw new AccountLockedException(usuario.lockedUntil());
+        }
+
+        if (!passwordHasher.matches(rawPassword, usuario.passwordHash())) {
+            Usuario updated = usuario.incrementFailedAttempts(now);
+            usuarioRepository.save(updated);
+            throw new InvalidCredentialsException();
+        }
+
+        Usuario updated = usuario.resetFailedAttempts();
+        usuarioRepository.save(updated);
+
+        AccessToken accessToken = tokenProvider.issueAccessToken(updated);
         String rawRefresh = tokenProvider.generateRefreshToken();
         Instant refreshExpiry = tokenProvider.refreshTokenExpiry();
         refreshTokenRepository.save(new RefreshToken(
-            null, tokenProvider.hashRefreshToken(rawRefresh), usuario.id(), refreshExpiry, false));
+            null, tokenProvider.hashRefreshToken(rawRefresh), updated.id(), refreshExpiry, false));
 
         return new TokenPair(accessToken, rawRefresh, refreshExpiry);
     }

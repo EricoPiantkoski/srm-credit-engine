@@ -41,4 +41,11 @@ public class RefreshTokenRepositoryAdapter implements RefreshTokenRepository {
             entity.getId(), entity.getTokenHash(), entity.getUsuarioId(), entity.getExpiresAt(),
             entity.isRevoked()));
     }
+
+    @Override
+    public Optional<RefreshToken> findByTokenHashForUpdate(String tokenHash) {
+        return jpaRepository.findByTokenHashForUpdate(tokenHash).map(entity -> new RefreshToken(
+            entity.getId(), entity.getTokenHash(), entity.getUsuarioId(), entity.getExpiresAt(),
+            entity.isRevoked()));
+    }
 }

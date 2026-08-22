@@ -1,8 +1,13 @@
+---
+description: Java, Spring, API, DB, domínio. Use para backend.
+mode: subagent
+---
+
 # Architecture and operation methodology
 
 ## Stack
 
-- Linguagem: Java 21
+- Linguagem: Java 25
 - Framework: Spring Boot 3
 - Banco de dados: PostgreSQL
 - Testes: JUnit, Mockito
@@ -25,8 +30,7 @@
 - Se a alteração solicitada for complexa, a sugestão de implementação deve ser exibida em detalhes no arquivo .docs/implementation_plan.md, que deve ser sempre atualizado em sua totalidade com a nova solicitação. Se esse for o caso, não atue e aguarde o usuário aprovar o implementation_plan.md
   - Considere complexa uma alteração que envolva múltiplos módulos, contratos de API, modelo de dados, autenticação, integrações externas, migrações ou risco relevante de regressão.
 - Não bloqueie tarefas simples nem crie arquivos de planejamento sem necessidade.
-- Aplique os seguintes princípios de forma pragmática, sem criar complexidade
-ou abstrações desnecessárias:
+- Aplique os seguintes princípios de forma pragmática, sem criar complexidade ou abstrações desnecessárias:
   - Codebase & Sincronização:
     - NUNCA faça commit ou push sem solicitação explícita.
     - Antes de propor ou gerar qualquer nova alteração de código, você DEVE executar o seguinte protocolo:
