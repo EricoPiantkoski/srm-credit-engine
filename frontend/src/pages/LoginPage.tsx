@@ -42,7 +42,6 @@ export default function LoginPage() {
         </div>
 
         <h1 className="login__title">Acessar o sistema</h1>
-        <p className="login__subtitle">Entre com suas credenciais de administrador</p>
 
         <form className="form" onSubmit={handleSubmit(onSubmit)} noValidate>
           <div className="form__group">

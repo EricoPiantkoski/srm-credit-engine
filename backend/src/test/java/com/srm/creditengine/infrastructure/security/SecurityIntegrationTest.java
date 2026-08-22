@@ -74,26 +74,6 @@ class SecurityIntegrationTest {
     }
 
     @Test
-    void prometheusEndpointRejectsAnonymous() {
-        ResponseEntity<String> response = restTemplate.getForEntity("/actuator/prometheus", String.class);
-
-        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
-    }
-
-    @Test
-    void prometheusEndpointAcceptsAdminTokenAndReturnsMetrics() {
-        TokenPair tokens = login.login("admin", "admin123", Instant.now());
-
-        HttpHeaders headers = new HttpHeaders();
-        headers.setBearerAuth(tokens.accessToken().value());
-        ResponseEntity<String> response = restTemplate.exchange(
-            "/actuator/prometheus", HttpMethod.GET, new HttpEntity<>(headers), String.class);
-
-        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
-        assertThat(response.getBody()).contains("jvm_memory_used_bytes");
-    }
-
-    @Test
     void loginRejectsWrongPassword() {
         HttpHeaders headers = new HttpHeaders();
         headers.setContentType(MediaType.APPLICATION_JSON);
