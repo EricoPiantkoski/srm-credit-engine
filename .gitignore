@@ -1,9 +1,6 @@
 # IDE
 .idea/
 
-# opencode
-.opencode/
-
 # macOS
 .DS_Store
 
@@ -20,8 +17,8 @@ target/
 backups/
 
 # Env
-.env
 .env.*
+!.env
 !.env.example
 
 # Frontend test artifacts

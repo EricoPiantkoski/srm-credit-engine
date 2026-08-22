@@ -1,6 +1,12 @@
+---
+description: React, TypeScript, UI, estado, consumo de API. Use para frontend.
+mode: subagent
+---
+
 # Frontend architecture and operation methodology
 
 ## Stack
+
 - Framework principal: React com TypeScript em modo strict.
 - Build e desenvolvimento: Vite.
 - Roteamento: React Router.
@@ -16,18 +22,20 @@
 - Vue, Angular e Svelte não devem ser usados simultaneamente com React. São alternativas ao framework principal e não se complementam neste projeto.
 
 ## Prioridade de regras
+
 1. Priorize requisitos explícitos do usuário, correção, segurança e acessibilidade.
 2. Preserve as convenções existentes do projeto e os contratos definidos pelo backend.
 3. Priorize simplicidade, testabilidade e desempenho medido antes de adicionar abstrações.
 
 ## Implementações
+
 - Se a alteração solicitada for complexa, a sugestão de implementação deve ser exibida em detalhes no arquivo .docs/implementation_plan.md, que deve ser sempre atualizado em sua totalidade com a nova solicitação. Se esse for o caso, não atue e aguarde o usuário aprovar o implementation_plan.md
-    - Considere complexa uma alteração que envolva múltiplos módulos, contratos de API, autenticação, navegação principal, gerenciamento de estado global, design system ou risco relevante de regressão.
+  - Considere complexa uma alteração que envolva múltiplos módulos, contratos de API, autenticação, navegação principal, gerenciamento de estado global, design system ou risco relevante de regressão.
 - Não bloqueie tarefas simples nem crie arquivos de planejamento sem necessidade.
 - Aplique os seguintes princípios de forma pragmática, sem criar complexidade ou abstrações desnecessárias:
-    - Codebase & Sincronização:
-        - NUNCA faça commit ou push sem solicitação explícita.
-        - Antes de propor ou gerar qualquer nova alteração de código, você DEVE executar o seguinte protocolo:
+  - Codebase & Sincronização:
+    - NUNCA faça commit ou push sem solicitação explícita.
+    - Antes de propor ou gerar qualquer nova alteração de código, você DEVE executar o seguinte protocolo:
             1. Monitoramento Semântico de Escopo:
                 - Rastreie ativamente o objetivo da janela atual de conversa. Se o usuário introduzir um novo requisito arquitetural, mudar de domínio, ou pedir para iniciar uma funcionalidade não relacionada, classifique isso como uma Mudança de Contexto.
             2. Validação de Estado:
@@ -52,6 +60,7 @@
 - Quando houver mudança relevante na arquitetura, API, fluxo de navegação, estado global, design system ou configuração, atualize o arquivo .docs/TechDoc.md de forma técnica e coesa.
 
 ## Frontend burro
+
 - Componentes de UI devem apresentar dados, receber props e emitir eventos; não devem conter regras de negócio, chamadas HTTP ou acesso direto ao estado global.
 - Regras de negócio devem permanecer no backend. O frontend pode conter apenas lógica de apresentação, interação, formatação, validação de experiência e composição de estado.
 - Não replique no frontend cálculos, permissões ou invariantes cuja fonte de verdade seja o backend.
@@ -60,9 +69,11 @@
 - Prefira composição de componentes e props explícitas a heranças, prop drilling excessivo ou contextos globais indiscriminados.
 
 ## Arquitetura
+
 - Organize o código por features e responsabilidades, evitando um diretório global com componentes, hooks ou serviços sem contexto.
 - Separe componentes visuais reutilizáveis, páginas, hooks de aplicação, adapters de API, estado e estilos.
 - Uma estrutura preferencial é:
+
   ```text
   src/
   ├── app/            # bootstrap, providers, roteamento e configuração
@@ -73,6 +84,7 @@
   ├── state/          # estado global de cliente, somente quando necessário
   └── styles/         # tokens, temas e estilos globais
   ```
+
 - Componentes de apresentação não devem importar TanStack Query, Zustand ou cliente HTTP diretamente.
 - Hooks e módulos de aplicação devem encapsular acesso a dados, mutações e efeitos necessários à feature.
 - Adapters devem traduzir contratos externos para modelos consumíveis pela aplicação sem espalhar detalhes HTTP pela UI.
@@ -80,6 +92,7 @@
 - Evite componentes monolíticos; extraia apenas quando houver responsabilidade, reutilização ou testabilidade claras.
 
 ## Gerenciamento de Estado
+
 - Use estado local por padrão para interações restritas a um componente ou tela.
 - Use TanStack Query para cache, carregamento, invalidação, sincronização e mutações de dados vindos do backend.
 - Não copie dados do TanStack Query para Zustand ou outro estado global sem necessidade concreta.
@@ -90,6 +103,7 @@
 - Use atualizações otimistas apenas quando houver rollback seguro e benefício perceptível para a experiência.
 
 ## UI e UX
+
 - Use HTML semântico, hierarquia visual clara, labels associados aos campos e navegação completa por teclado.
 - Garanta foco visível, contraste adequado, mensagens acessíveis, suporte a leitores de tela e respeito a `prefers-reduced-motion`.
 - A interface deve funcionar em telas pequenas e grandes, com comportamento responsivo definido para os principais estados.
@@ -103,6 +117,7 @@
 - Não implemente dark patterns, feedback enganoso ou bloqueios de navegação sem justificativa de negócio.
 
 ## Segurança
+
 - Nunca trate guards de rota ou estado de autenticação no frontend como autorização; o backend deve validar toda operação protegida.
 - Não armazene tokens sensíveis em `localStorage` ou `sessionStorage`; use a estratégia de autenticação definida pelo backend, preferencialmente cookies `HttpOnly`, `Secure` e `SameSite` quando aplicáveis.
 - Nunca inclua secrets, chaves privadas ou credenciais em código, variáveis expostas ao bundle ou mensagens de erro.
@@ -112,6 +127,7 @@
 - Dependências devem ser atualizadas e verificadas contra vulnerabilidades conhecidas.
 
 ## 12-Factor Frontend
+
 - Declare dependências no `package.json` e mantenha o `pnpm-lock.yaml` versionado.
 - Separe build, release e execução. O build deve ser reproduzível e os artefatos devem ser imutáveis após a publicação.
 - Configure a URL da API e demais configurações públicas externamente; nunca trate configuração exposta ao navegador como secret.
@@ -123,6 +139,7 @@
 - Mantenha paridade entre desenvolvimento, testes e produção quanto a versões, contratos de API e configurações públicas.
 
 ## Tratamento de Erros
+
 - Normalize erros da API em um formato consumível pela interface, preservando códigos HTTP e mensagens apropriadas.
 - Trate erros esperados com feedback contextual e erros inesperados com uma tela ou estado de recuperação apropriado.
 - Use Error Boundaries para falhas de renderização e ofereça recuperação sem mascarar o erro.
@@ -131,6 +148,7 @@
 - Evite exibir detalhes técnicos, stack traces ou informações internas ao usuário.
 
 ## Testes
+
 - Defina a estratégia de testes conforme o tipo, risco e impacto da alteração.
 - Cubra componentes com testes orientados ao comportamento do usuário usando React Testing Library.
 - Cubra hooks, adapters e regras de apresentação com testes unitários quando possuírem comportamento relevante.
@@ -145,6 +163,7 @@
 - Não considere uma alteração concluída enquanto testes relevantes introduzidos ou modificados estiverem falhando. Falhas preexistentes e fora do escopo devem ser reportadas com evidências, sem serem mascaradas.
 
 ## Critérios de Aceite
+
 - Antes de declarar a tarefa concluída, verifique cada critério aplicável abaixo. Se algum critério falhar, corrija a implementação e repita a verificação sem ampliar o escopo sem autorização. Não entregue a tarefa apenas reportando falhas conhecidas; informe somente limitações que não puderem ser resolvidas no escopo atual.
 - Separação: componentes de UI não contêm regras de negócio, chamadas HTTP ou acesso direto ao estado global; a lógica de aplicação e os adapters possuem responsabilidades claras.
 - Usabilidade: fluxos possuem estados de carregamento, sucesso, vazio e erro; mensagens são claras; formulários preservam entradas inválidas e a navegação é previsível.

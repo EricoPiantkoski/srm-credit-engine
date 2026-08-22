@@ -7,4 +7,6 @@ public interface UsuarioRepository {
     Optional<Usuario> findByUsername(String username);
 
     Optional<Usuario> findById(Long id);
+
+    Usuario save(Usuario usuario);
 }

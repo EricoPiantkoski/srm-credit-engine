@@ -3,5 +3,14 @@ app:
     allowed-origins: http://localhost:5173
   security:
     jwt:
-      secret: test-secret-for-automated-tests-0000000000000000
+      secret: dGVzdC1zZWNyZXQtZm9yLWF1dG9tYXRlZC10ZXN0cy0wMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMA==
     expose-docs: true
+
+management:
+  endpoint:
+    prometheus:
+      enabled: true
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus

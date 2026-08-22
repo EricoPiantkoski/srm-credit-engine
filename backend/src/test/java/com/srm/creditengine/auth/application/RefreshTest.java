@@ -39,9 +39,9 @@ class RefreshTest {
     void refreshRotatesAndReissuesTokens() {
         Instant now = Instant.parse("2026-08-16T12:00:00Z");
         RefreshToken existing = new RefreshToken(5L, "hashed-old", 1L, now.plusSeconds(3600), false);
-        Usuario usuario = new Usuario(1L, "admin", "hash", Role.ADMIN, false);
+        Usuario usuario = new Usuario(1L, "admin", "hash", Role.ADMIN, false, 0, null);
         when(tokenProvider.hashRefreshToken("raw-old")).thenReturn("hashed-old");
-        when(refreshTokenRepository.findByTokenHash("hashed-old")).thenReturn(Optional.of(existing));
+        when(refreshTokenRepository.findByTokenHashForUpdate("hashed-old")).thenReturn(Optional.of(existing));
         when(usuarioRepository.findById(1L)).thenReturn(Optional.of(usuario));
         when(refreshTokenRepository.save(existing.revogar())).thenReturn(existing.revogar());
         when(tokenProvider.issueAccessToken(usuario))
@@ -67,7 +67,7 @@ class RefreshTest {
     void refreshRejectsUnknownToken() {
         Instant now = Instant.parse("2026-08-16T12:00:00Z");
         when(tokenProvider.hashRefreshToken("raw-unknown")).thenReturn("hashed-unknown");
-        when(refreshTokenRepository.findByTokenHash("hashed-unknown")).thenReturn(Optional.empty());
+        when(refreshTokenRepository.findByTokenHashForUpdate("hashed-unknown")).thenReturn(Optional.empty());
 
         Refresh refresh = new Refresh(usuarioRepository, refreshTokenRepository, tokenProvider);
 
@@ -80,7 +80,7 @@ class RefreshTest {
         Instant now = Instant.parse("2026-08-16T12:00:00Z");
         RefreshToken revoked = new RefreshToken(5L, "hashed", 1L, now.plusSeconds(3600), true);
         when(tokenProvider.hashRefreshToken("raw")).thenReturn("hashed");
-        when(refreshTokenRepository.findByTokenHash("hashed")).thenReturn(Optional.of(revoked));
+        when(refreshTokenRepository.findByTokenHashForUpdate("hashed")).thenReturn(Optional.of(revoked));
 
         Refresh refresh = new Refresh(usuarioRepository, refreshTokenRepository, tokenProvider);
 
@@ -93,7 +93,7 @@ class RefreshTest {
         Instant now = Instant.parse("2026-08-16T12:00:00Z");
         RefreshToken expired = new RefreshToken(5L, "hashed", 1L, now.minusSeconds(1), false);
         when(tokenProvider.hashRefreshToken("raw")).thenReturn("hashed");
-        when(refreshTokenRepository.findByTokenHash("hashed")).thenReturn(Optional.of(expired));
+        when(refreshTokenRepository.findByTokenHashForUpdate("hashed")).thenReturn(Optional.of(expired));
 
         Refresh refresh = new Refresh(usuarioRepository, refreshTokenRepository, tokenProvider);
 
@@ -106,7 +106,7 @@ class RefreshTest {
         Instant now = Instant.parse("2026-08-16T12:00:00Z");
         RefreshToken existing = new RefreshToken(5L, "hashed", 99L, now.plusSeconds(3600), false);
         when(tokenProvider.hashRefreshToken("raw")).thenReturn("hashed");
-        when(refreshTokenRepository.findByTokenHash("hashed")).thenReturn(Optional.of(existing));
+        when(refreshTokenRepository.findByTokenHashForUpdate("hashed")).thenReturn(Optional.of(existing));
         when(usuarioRepository.findById(99L)).thenReturn(Optional.empty());
 
         Refresh refresh = new Refresh(usuarioRepository, refreshTokenRepository, tokenProvider);

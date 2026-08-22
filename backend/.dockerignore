@@ -1,3 +1,8 @@
 target/
+.git/
 .idea/
 *.iml
+*.log
+.mvn/
+.mvnw
+mvnw.cmd

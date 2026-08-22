@@ -48,20 +48,17 @@ spring:
             retryer: com.srm.creditengine.cambio.infrastructure.config.BackoffRetryer
             error-decoder: com.srm.creditengine.cambio.infrastructure.config.RetryableServerErrorDecoder
 
-resilience4j:
-  circuitbreaker:
-    configs:
-      default:
-        sliding-window-size: 10
-        failure-rate-threshold: 50
-        wait-duration-in-open-state: 10s
-        permitted-number-of-calls-in-half-open-state: 3
-        minimum-number-of-calls: 5
-    instances:
-      bcbPtax:
-        base-config: default
-      awesomeApiBrc:
-        base-config: default
+management:
+  otlp:
+    tracing:
+      endpoint: ${OTEL_EXPORTER_OTLP_ENDPOINT:http://tempo:4317}
+  endpoint:
+    prometheus:
+      enabled: true
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus
   datasource:
     url: ${DB_URL}
     username: ${DB_USERNAME}
@@ -74,11 +71,7 @@ resilience4j:
       ddl-auto: validate
     open-in-view: false
 
-management:
-  endpoint:
-    prometheus:
-      enabled: true
-  endpoints:
-    web:
-      exposure:
-        include: health,info,metrics,prometheus
+sentry:
+  dsn: ${SENTRY_DSN:}
+  traces-sample-rate: 0.1
+  profiles-sample-rate: 0.1
