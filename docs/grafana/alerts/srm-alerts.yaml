@@ -1,0 +1,64 @@
+groups:
+  - name: srm-credit-engine
+    interval: 30s
+    rules:
+      - alert: CircuitBreakerOpen
+        expr: srm_circuit_breaker_state{state="open"} > 0
+        for: 1m
+        labels:
+          severity: critical
+          team: srm-platform
+        annotations:
+          summary: "Circuit breaker {{ $labels.name }} is OPEN"
+          description: "Circuit breaker {{ $labels.name }} has been open for more than 1 minute. External service calls are failing."
+          runbook_url: "https://docs.srm.internal/runbooks/circuit-breaker-open"
+
+      - alert: HighHttp5xxRate
+        expr: (sum(rate(http_server_requests_seconds_count{status=~"5.."}[5m])) / sum(rate(http_server_requests_seconds_count[5m]))) > 0.05
+        for: 5m
+        labels:
+          severity: warning
+          team: srm-platform
+        annotations:
+          summary: "High HTTP 5xx error rate"
+          description: "HTTP 5xx error rate is {{ $value | humanizePercentage }} for the last 5 minutes."
+
+      - alert: HikariCPPendingConnections
+        expr: hikaricp_connections_pending > 10
+        for: 5m
+        labels:
+          severity: warning
+          team: srm-platform
+        annotations:
+          summary: "HikariCP pending connections high"
+          description: "{{ $value }} connections are waiting for a pool connection."
+
+      - alert: JVMMemoryUsageHigh
+        expr: (jvm_memory_used_bytes / jvm_memory_max_bytes) > 0.85
+        for: 10m
+        labels:
+          severity: warning
+          team: srm-platform
+        annotations:
+          summary: "JVM memory usage above 85%"
+          description: "JVM memory usage is {{ $value | humanizePercentage }}."
+
+      - alert: HighHttpLatency
+        expr: (rate(http_server_requests_seconds_sum[5m]) / rate(http_server_requests_seconds_count[5m])) > 2
+        for: 5m
+        labels:
+          severity: warning
+          team: srm-platform
+        annotations:
+          summary: "High HTTP latency"
+          description: "Average HTTP latency is {{ $value }} seconds."
+
+      - alert: ApplicationDown
+        expr: up{job="srm-credit-engine"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          team: srm-platform
+        annotations:
+          summary: "SRM Credit Engine is down"
+          description: "The application has been down for more than 1 minute."

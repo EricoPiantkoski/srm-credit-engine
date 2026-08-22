@@ -2,41 +2,123 @@ services:
   postgres:
     image: postgres:16-alpine
     environment:
-      POSTGRES_DB: ${POSTGRES_DB:?POSTGRES_DB is required}
-      POSTGRES_USER: ${POSTGRES_USER:?POSTGRES_USER is required}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      test: ["CMD-SHELL", "pg_isready -U postgres -d ${POSTGRES_DB}"]
       interval: 5s
       timeout: 5s
       retries: 10
+      start_period: 10s
+    networks:
+      - srm-network
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    deploy:
+      resources:
+        limits:
+          cpus: '1'
+          memory: 1G
+        reservations:
+          cpus: '0.5'
+          memory: 512M
 
   backend:
-    image: ${BACKEND_IMAGE:-srm-asset-backend:local}
-    build: ./backend
+    image: ${BACKEND_IMAGE}
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
     environment:
-      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/${POSTGRES_DB:?POSTGRES_DB is required}
-      SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER:?POSTGRES_USER is required}
-      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
-      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET is required}
-      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-http://localhost}
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/${POSTGRES_DB}
+      SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER}
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD}
+      JWT_SECRET: ${JWT_SECRET}
+      JWT_ACCESS_TOKEN_TTL: ${JWT_ACCESS_TOKEN_TTL}
+      JWT_REFRESH_TOKEN_TTL: ${JWT_REFRESH_TOKEN_TTL}
+      JWT_ISSUER: ${JWT_ISSUER}
+      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS}
+      RATE_LIMIT_CAPACITY: ${RATE_LIMIT_CAPACITY}
+      RATE_LIMIT_REFILL: ${RATE_LIMIT_REFILL}
+      PRECIFICACAO_TAXA_BASE: ${PRECIFICACAO_TAXA_BASE}
+      BCB_PTAX_BASE_URL: ${BCB_PTAX_BASE_URL}
+      BCB_PTAX_TIMEOUT_MS: ${BCB_PTAX_TIMEOUT_MS}
+      BCB_PTAX_QUOTE_CURRENCY: ${BCB_PTAX_QUOTE_CURRENCY}
+      AWESOME_API_BASE_URL: ${AWESOME_API_BASE_URL}
+      AWESOME_API_TIMEOUT_MS: ${AWESOME_API_TIMEOUT_MS}
+      SECURITY_EXPOSE_DOCS: ${SECURITY_EXPOSE_DOCS}
+      SECURITY_CONTENT_SECURITY_POLICY: ${SECURITY_CONTENT_SECURITY_POLICY}
+      SPRING_PROFILES_ACTIVE: prod
     ports:
       - "8080:8080"
     depends_on:
       postgres:
         condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8080/api/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 120s
+    networks:
+      - srm-network
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    deploy:
+      resources:
+        limits:
+          cpus: '2'
+          memory: 2G
+        reservations:
+          cpus: '0.5'
+          memory: 512M
 
   frontend:
-    image: ${FRONTEND_IMAGE:-srm-asset-frontend:local}
-    build: ./frontend
+    image: ${FRONTEND_IMAGE}
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
     environment:
       BACKEND_URL: http://backend:8080
+      VITE_API_BASE_URL: http://backend:8080
     ports:
       - "80:80"
     depends_on:
-      - backend
+      backend:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1/api/health"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 10s
+    networks:
+      - srm-network
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
+        reservations:
+          cpus: '0.1'
+          memory: 64M
 
 volumes:
   postgres_data:
+
+networks:
+  srm-network:
+    driver: bridge

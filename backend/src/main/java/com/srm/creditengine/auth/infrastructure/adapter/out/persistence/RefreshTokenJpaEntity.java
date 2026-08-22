@@ -6,6 +6,7 @@ import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
+import jakarta.persistence.Version;
 import java.time.Instant;
 
 @Entity
@@ -30,6 +31,10 @@ public class RefreshTokenJpaEntity {
 
     @Column(name = "created_at", nullable = false)
     private Instant createdAt;
+
+    @Version
+    @Column(name = "version", nullable = false)
+    private Long version;
 
     protected RefreshTokenJpaEntity() {}
 
@@ -68,5 +73,13 @@ public class RefreshTokenJpaEntity {
 
     public void setExpiresAt(Instant expiresAt) {
         this.expiresAt = expiresAt;
+    }
+
+    public Long getVersion() {
+        return version;
+    }
+
+    public void setVersion(Long version) {
+        this.version = version;
     }
 }

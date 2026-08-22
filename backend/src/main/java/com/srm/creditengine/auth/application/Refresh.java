@@ -25,7 +25,7 @@ public class Refresh {
 
     public TokenPair refresh(String rawRefreshToken, Instant now) {
         RefreshToken existing = refreshTokenRepository
-            .findByTokenHash(tokenProvider.hashRefreshToken(rawRefreshToken))
+            .findByTokenHashForUpdate(tokenProvider.hashRefreshToken(rawRefreshToken))
             .orElseThrow(InvalidRefreshTokenException::new);
 
         if (existing.revoked() || existing.isExpired(now)) {

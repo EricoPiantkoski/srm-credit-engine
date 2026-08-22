@@ -148,4 +148,32 @@ class LiquidarLoteTest {
             .isInstanceOf(IllegalArgumentException.class)
             .hasMessageContaining("UUID");
     }
+
+    @Test
+    void rejectsUuidV1() {
+        assertThatThrownBy(() -> new LiquidarLote.LiquidarLoteInput("550e8400-e29b-11d4-a716-446655440000", "BRL", List.of(10L)))
+            .isInstanceOf(IllegalArgumentException.class)
+            .hasMessageContaining("UUID v4");
+    }
+
+    @Test
+    void rejectsUuidV3() {
+        assertThatThrownBy(() -> new LiquidarLote.LiquidarLoteInput("6ba7b810-9dad-33d1-80b4-00c04fd430c8", "BRL", List.of(10L)))
+            .isInstanceOf(IllegalArgumentException.class)
+            .hasMessageContaining("UUID v4");
+    }
+
+    @Test
+    void rejectsUuidV5() {
+        assertThatThrownBy(() -> new LiquidarLote.LiquidarLoteInput("6ba7b810-9dad-53d1-80b4-00c04fd430c8", "BRL", List.of(10L)))
+            .isInstanceOf(IllegalArgumentException.class)
+            .hasMessageContaining("UUID v4");
+    }
+
+    @Test
+    void rejectsNilUuid() {
+        assertThatThrownBy(() -> new LiquidarLote.LiquidarLoteInput("00000000-0000-0000-0000-000000000000", "BRL", List.of(10L)))
+            .isInstanceOf(IllegalArgumentException.class)
+            .hasMessageContaining("UUID v4");
+    }
 }

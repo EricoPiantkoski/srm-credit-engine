@@ -9,6 +9,7 @@ import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.Base64;
 import java.util.HexFormat;
 import java.util.List;
 import java.util.UUID;
@@ -20,6 +21,7 @@ import org.springframework.security.oauth2.jwt.JwtEncoder;
 import org.springframework.security.oauth2.jwt.JwtEncoderParameters;
 import org.springframework.security.oauth2.jwt.JwsHeader;
 import org.springframework.security.oauth2.jwt.NimbusJwtEncoder;
+import jakarta.annotation.PostConstruct;
 
 public class JwtTokenProvider implements TokenProvider {
 
@@ -29,10 +31,27 @@ public class JwtTokenProvider implements TokenProvider {
     private final String issuer;
 
     public JwtTokenProvider(String secret, Duration accessTokenTtl, Duration refreshTokenTtl, String issuer) {
+        validateSecret(secret);
         this.jwtEncoder = new NimbusJwtEncoder(new ImmutableSecret<>(secretKeyFor(secret)));
         this.accessTokenTtl = accessTokenTtl;
         this.refreshTokenTtl = refreshTokenTtl;
         this.issuer = issuer;
+    }
+
+    @PostConstruct
+    public void validateSecret() {
+    }
+
+    private static void validateSecret(String secret) {
+        byte[] decoded;
+        try {
+            decoded = Base64.getDecoder().decode(secret);
+        } catch (IllegalArgumentException e) {
+            throw new IllegalStateException("JWT_SECRET must be valid base64", e);
+        }
+        if (decoded.length < 32) {
+            throw new IllegalStateException("JWT_SECRET must be at least 32 bytes (base64-decoded), but was: " + decoded.length + " bytes");
+        }
     }
 
     public static SecretKey secretKeyFor(String secret) {
@@ -72,11 +91,13 @@ public class JwtTokenProvider implements TokenProvider {
     }
 
     private static byte[] normalizeSecret(String secret) {
-        byte[] raw = secret.getBytes(StandardCharsets.UTF_8);
-        if (raw.length >= 32) {
-            return raw;
+        byte[] decoded;
+        try {
+            decoded = Base64.getDecoder().decode(secret);
+        } catch (IllegalArgumentException e) {
+            throw new IllegalStateException("JWT_SECRET must be valid base64", e);
         }
-        return sha256(raw);
+        return decoded;
     }
 
     private static byte[] sha256(byte[] input) {

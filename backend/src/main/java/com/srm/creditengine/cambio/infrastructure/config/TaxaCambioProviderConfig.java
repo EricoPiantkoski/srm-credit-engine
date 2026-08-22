@@ -14,6 +14,7 @@ import com.srm.creditengine.cambio.infrastructure.adapter.out.external.BcbPtaxTa
 import com.srm.creditengine.cambio.infrastructure.adapter.out.external.TaxaCambioProviderRouter;
 import java.time.ZoneId;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.cloud.openfeign.FeignClient;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Primary;
@@ -60,5 +61,10 @@ public class TaxaCambioProviderConfig {
     public TaxaCambioOrchestrator taxaCambioOrchestrator(TaxaCambioProvider provider,
             TaxaCambioRepository repository, MoedaRepository moedaRepository) {
         return new TaxaCambioOrchestrator(provider, repository, moedaRepository);
+    }
+
+    @Bean
+    public RequestIdFeignInterceptor requestIdFeignInterceptor() {
+        return new RequestIdFeignInterceptor();
     }
 }

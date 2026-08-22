@@ -14,6 +14,7 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.ConstraintViolationException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.context.MessageSourceResolvable;
@@ -58,6 +59,26 @@ public class GlobalExceptionHandler {
     public ResponseEntity<ErrorBody> handleLiquidacaoVersionConflict(LiquidacaoVersionConflictException ex) {
         return ResponseEntity.status(HttpStatus.CONFLICT)
             .body(new ErrorBody(ex.getMessage()));
+    }
+
+    @ExceptionHandler(DataIntegrityViolationException.class)
+    public ResponseEntity<ErrorBody> handleDataIntegrityViolation(DataIntegrityViolationException ex, HttpServletRequest req) {
+        String requestId = org.slf4j.MDC.get("requestId");
+        log.warn("requestId={} unique constraint violation on {}", requestId, req.getRequestURI(), ex);
+
+        String message = "Resource already exists";
+        Throwable cause = ex.getCause();
+        if (cause != null && "org.postgresql.util.PSQLException".equals(cause.getClass().getName())) {
+            try {
+                java.lang.reflect.Method getSQLState = cause.getClass().getMethod("getSQLState");
+                String sqlState = (String) getSQLState.invoke(cause);
+                if ("23505".equals(sqlState)) {
+                    message = "Duplicate resource";
+                }
+            } catch (Exception ignored) {
+            }
+        }
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(new ErrorBody(message));
     }
 
     @ExceptionHandler(LiquidacaoNotFoundException.class)
@@ -110,6 +131,13 @@ public class GlobalExceptionHandler {
             com.srm.creditengine.auth.domain.exception.InvalidRefreshTokenException ex) {
         return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
             .body(new ErrorBody(ex.getMessage()));
+    }
+
+    @ExceptionHandler(com.srm.creditengine.auth.domain.exception.AccountLockedException.class)
+    public ResponseEntity<ErrorBody> handleAccountLocked(
+            com.srm.creditengine.auth.domain.exception.AccountLockedException ex) {
+        return ResponseEntity.status(HttpStatus.FORBIDDEN)
+            .body(new ErrorBody("Account locked until " + ex.getLockedUntil()));
     }
 
     @ExceptionHandler(HandlerMethodValidationException.class)

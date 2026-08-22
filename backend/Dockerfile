@@ -11,4 +11,5 @@ WORKDIR /app
 COPY --from=build /app/target/*-SNAPSHOT.jar app.jar
 EXPOSE 8080
 HEALTHCHECK --interval=30s --timeout=5s --retries=5 --start-period=120s CMD curl -fsS http://127.0.0.1:8080/api/health || exit 1
+USER 1000:1000
 ENTRYPOINT ["java", "-jar", "/app/app.jar"]

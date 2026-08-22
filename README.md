@@ -1,4 +1,4 @@
-<p align="right">
+ <p align="right">
   <img alt="Java" src="https://img.shields.io/badge/Java-21-E34F26?logo=openjdk&logoColor=white">
   <img alt="Spring Boot" src="https://img.shields.io/badge/Spring_Boot-3.x-6DB33F?logo=spring&logoColor=white">
   <img alt="React" src="https://img.shields.io/badge/React-18-61DAFB?logo=react&logoColor=black">
@@ -31,6 +31,45 @@ A fim de **precificar e liquidar** ativos com segurança e precisão decimal, a 
 - **Resiliência** nas chamadas externas: `retry` com `backoff` e `circuit breaker` (`resilience4j`) para BCB PTAX e AwesomeAPI, com degradação graciosa e orientação ao operador.
 - **Qualidade**: testes unitários, de contrato (WireMock), de integração (Testcontainers) e de API; gate de cobertura **JaCoCo ≥ 90%**.
 - **Frontend** (React 18 + TypeScript + Vite) organizado por features, com TanStack Query, React Hook Form + Zod, e testes Vitest + Playwright.
+
+## Quick Start com Docker (Recomendado)
+
+A forma mais rápida de rodar a stack completa (backend + frontend + PostgreSQL):
+
+```bash
+# Clonar e subir
+git clone <repo-url>
+cd srm_asset
+docker compose up --build -d
+
+# Verificar saúde
+curl http://localhost:8080/api/health          # {"status":"UP"}
+curl http://localhost:8080/api/health/readiness # {"status":"UP"}
+
+# Acessar
+# Frontend: http://localhost:5173
+# Backend API: http://localhost:8080
+# Swagger UI: http://localhost:8080/swagger-ui.html
+# Postgres: localhost:5656 (user: postgres, pass: postgres, db: srm_credit)
+```
+
+> **O arquivo `.env` já está configurado com valores de desenvolvimento** (JWT_SECRET, DB, CORS, etc.).  
+> Para produção, gere seu próprio `JWT_SECRET`: `openssl rand -base64 32` e configure as variáveis no provedor de cloud.
+
+### Autenticação
+```bash
+curl -X POST http://localhost:8080/api/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"username":"admin","password":"admin123"}'
+```
+
+### Parar e limpar
+```bash
+docker compose down          # para containers
+docker compose down -v       # para e remove volumes (reset DB)
+```
+
+---
 
 ### Documentação técnica
 

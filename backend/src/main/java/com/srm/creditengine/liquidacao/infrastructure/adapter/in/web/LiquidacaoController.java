@@ -87,14 +87,14 @@ public class LiquidacaoController {
 
     public record LiquidacaoCreateRequest(
         @NotBlank
-        @Pattern(regexp = UUID_REGEX, message = "chaveIdempotencia deve ser um UUID")
+        @Pattern(regexp = UUID_V4_REGEX, message = "chaveIdempotencia deve ser um UUID v4")
         @Size(max = 36)
         String chaveIdempotencia,
         @NotBlank @Pattern(regexp = "[A-Z]{3}") String codigoMoedaPagamento,
         @NotEmpty List<@NotNull Long> recebiveisIds) {}
 
-    private static final String UUID_REGEX =
-        "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$";
+    private static final String UUID_V4_REGEX =
+        "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$";
 
     public record ItemLiquidacaoResponse(
         Long recebivelId, BigDecimal valorPresente, BigDecimal spreadAplicado,

@@ -9,6 +9,72 @@ services:
       - "5656:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d srm_credit"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    env_file:
+      - .env
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/srm_credit
+      SPRING_DATASOURCE_USERNAME: postgres
+      SPRING_DATASOURCE_PASSWORD: postgres
+      JWT_ACCESS_TOKEN_TTL: 15m
+      JWT_REFRESH_TOKEN_TTL: 7d
+      JWT_ISSUER: SRM-CREDIT-ENGINE
+      CORS_ALLOWED_ORIGINS: http://localhost:5173
+      RATE_LIMIT_CAPACITY: 100
+      RATE_LIMIT_REFILL: PT1M
+      PRECIFICACAO_TAXA_BASE: 0.0
+      BCB_PTAX_BASE_URL: https://olinda.bcb.gov.br/olinda/servico/PTAX/versao/v1/odata
+      BCB_PTAX_TIMEOUT_MS: 5000
+      BCB_PTAX_QUOTE_CURRENCY: USD
+      AWESOME_API_BASE_URL: https://economia.awesomeapi.com.br
+      AWESOME_API_TIMEOUT_MS: 5000
+      SECURITY_EXPOSE_DOCS: "true"
+      SECURITY_CONTENT_SECURITY_POLICY: "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self'; frame-ancestors 'none';"
+      SPRING_PROFILES_ACTIVE: local
+    ports:
+      - "8080:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8080/api/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 120s
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    environment:
+      BACKEND_URL: http://backend:8080
+      VITE_API_BASE_URL: http://backend:8080
+      VITE_MSW_ENABLED: "false"
+    ports:
+      - "5173:80"
+    depends_on:
+      backend:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1/api/health"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 10s
 
 volumes:
   pgdata:
+
+networks:
+  default:
+    name: srm-network
