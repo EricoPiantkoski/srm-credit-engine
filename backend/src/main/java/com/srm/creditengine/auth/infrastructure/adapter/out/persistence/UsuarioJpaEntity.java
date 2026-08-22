@@ -31,6 +31,12 @@ public class UsuarioJpaEntity {
     @Column(name = "created_at", nullable = false)
     private Instant createdAt;
 
+    @Column(name = "failed_login_attempts", nullable = false)
+    private int failedLoginAttempts;
+
+    @Column(name = "locked_until")
+    private Instant lockedUntil;
+
     protected UsuarioJpaEntity() {}
 
     public UsuarioJpaEntity(String username, String passwordHash, String role, boolean deveTrocarSenha,
@@ -60,5 +66,21 @@ public class UsuarioJpaEntity {
 
     public boolean isDeveTrocarSenha() {
         return deveTrocarSenha;
+    }
+
+    public int getFailedLoginAttempts() {
+        return failedLoginAttempts;
+    }
+
+    public void setFailedLoginAttempts(int failedLoginAttempts) {
+        this.failedLoginAttempts = failedLoginAttempts;
+    }
+
+    public Instant getLockedUntil() {
+        return lockedUntil;
+    }
+
+    public void setLockedUntil(Instant lockedUntil) {
+        this.lockedUntil = lockedUntil;
     }
 }

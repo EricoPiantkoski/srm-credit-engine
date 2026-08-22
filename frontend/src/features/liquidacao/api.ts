@@ -7,7 +7,7 @@ export interface ItemLiquidacao {
   prazoMeses: number
   valorPagamento: number
   codigoMoedaPagamento: string
-  taxaAplicada: number
+  taxaAplicada: number | null
 }
 
 export interface Liquidacao {

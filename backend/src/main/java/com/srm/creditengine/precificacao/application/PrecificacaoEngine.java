@@ -20,9 +20,11 @@ public class PrecificacaoEngine {
 
     private static final BigDecimal DAYS_PER_MONTH = new BigDecimal("30");
     private static final ZoneId BUSINESS_ZONE = ZoneId.of("America/Sao_Paulo");
+    private static final BigDecimal MAX_TAXA_BASE_MONTHLY = new BigDecimal("0.5");
 
     private final CambioGateway cambioGateway;
     private final BigDecimal taxaBase;
+    private final BigDecimalPowService powService;
 
     public PrecificacaoEngine(CambioGateway cambioGateway, BigDecimal taxaBase) {
         Objects.requireNonNull(cambioGateway, "cambioGateway must not be null");
@@ -30,8 +32,12 @@ public class PrecificacaoEngine {
         if (taxaBase.signum() < 0) {
             throw new IllegalArgumentException("taxaBase must be non-negative, but was: " + taxaBase);
         }
+        if (taxaBase.compareTo(MAX_TAXA_BASE_MONTHLY) > 0) {
+            throw new IllegalArgumentException("taxaBase must be monthly rate (≤ 50% a.m.), but was: " + taxaBase);
+        }
         this.cambioGateway = cambioGateway;
         this.taxaBase = taxaBase;
+        this.powService = new BigDecimalPowService();
     }
 
     public ResultadoPrecificacao price(Recebivel recebivel, PrecificacaoStrategy strategy,
@@ -41,7 +47,7 @@ public class PrecificacaoEngine {
         BigDecimal prazoMeses = prazoMeses(recebivel, precificacaoReference);
         validatePrazo(prazoMeses);
         BigDecimal factor = BigDecimal.ONE.add(taxaBase).add(spread.valor());
-        BigDecimal discount = pow(factor, prazoMeses);
+        BigDecimal discount = powService.pow(factor, prazoMeses);
         Dinheiro valorPresente = new Dinheiro(
             recebivel.valorFace().valor().divide(discount, recebivel.valorFace().escala(), RoundingMode.HALF_EVEN),
             recebivel.valorFace().moeda(), recebivel.valorFace().escala());
@@ -72,12 +78,5 @@ public class PrecificacaoEngine {
         if (prazoMeses.signum() <= 0) {
             throw new InvalidPricingException("prazo must be positive, but was: " + prazoMeses);
         }
-    }
-
-    private BigDecimal pow(BigDecimal base, BigDecimal exponent) {
-        if (exponent.stripTrailingZeros().scale() <= 0) {
-            return base.pow(exponent.intValueExact());
-        }
-        return BigDecimal.valueOf(Math.pow(base.doubleValue(), exponent.doubleValue()));
     }
 }

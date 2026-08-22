@@ -52,7 +52,7 @@ function ItensTable({ itens }: { itens: ItemLiquidacao[] }) {
             <th>Valor presente</th>
             <th>Valor pago</th>
             <th>Moeda</th>
-            <th>Prazo</th>
+            <th>PRAZO (MESES)</th>
             <th>Taxa</th>
           </tr>
         </thead>
@@ -64,7 +64,7 @@ function ItensTable({ itens }: { itens: ItemLiquidacao[] }) {
               <td className="mono">{formatMoney(item.valorPagamento, item.codigoMoedaPagamento)}</td>
               <td>{item.codigoMoedaPagamento}</td>
               <td>{item.prazoMeses}</td>
-              <td className="mono">{item.taxaAplicada.toLocaleString('pt-BR')}</td>
+              <td className="mono">{item.taxaAplicada !== null ? item.taxaAplicada.toLocaleString('pt-BR') : '—'}</td>
             </tr>
           ))}
         </tbody>

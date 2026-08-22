@@ -207,7 +207,7 @@ export default function ExtratoPage() {
                       <td>{item.cedente}</td>
                       <td className="mono">{formatMoney(item.valorPagamento, item.codigoMoedaPagamento)}</td>
                       <td>{item.codigoMoedaPagamento}</td>
-                      <td className="mono">{item.taxaAplicada.toLocaleString('pt-BR')}</td>
+                      <td className="mono">{item.taxaAplicada !== null ? item.taxaAplicada.toLocaleString('pt-BR') : '—'}</td>
                     </tr>
                   ))}
                 </tbody>

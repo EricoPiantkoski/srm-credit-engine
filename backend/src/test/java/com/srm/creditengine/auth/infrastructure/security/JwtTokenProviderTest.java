@@ -12,14 +12,14 @@ import org.junit.jupiter.api.Test;
 
 class JwtTokenProviderTest {
 
-    private static final String SECRET = "test-secret-that-is-long-enough-for-hs256-signing-1234";
+    private static final String SECRET = "dGVzdC1zZWNyZXQtdGhhdC1pcy1sb25nLWVub3VnaC1mb3ItaHMyNTYtc2lnbmluZy0xMjM0NTY3ODkwMTIzNDU2Nzg5MDE=";
 
     private final JwtTokenProvider provider =
         new JwtTokenProvider(SECRET, Duration.ofMinutes(15), Duration.ofDays(7), "SRM-CREDIT-ENGINE");
 
     @Test
     void issueAccessTokenProducesSignedJwtWithClaims() {
-        Usuario usuario = new Usuario(1L, "admin", "hash", Role.ADMIN, false);
+        Usuario usuario = new Usuario(1L, "admin", "hash", Role.ADMIN, false, 0, null);
         AccessToken token = provider.issueAccessToken(usuario);
 
         assertThat(token.value()).isNotBlank();
